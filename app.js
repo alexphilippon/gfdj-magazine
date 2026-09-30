@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=3";
-import { firebaseStore, memoryStore } from "./store.js?v=3";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=3";
+import * as L from "./logic.js?v=4";
+import { firebaseStore, memoryStore } from "./store.js?v=4";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=4";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,7 +52,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=3")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=4")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -115,13 +115,19 @@ function render() {
 function headerHtml() {
   const a = S.d.alerts;
   const bad = (issueId) => a.late.filter((t) => t.issueId === issueId).length + a.conflicts.filter((c) => c.issueId === issueId).length;
-  const tab = (id, label, badge) => `<button class="tab ${S.tab === id ? "on" : ""}" data-act="tab" data-tab="${id}">${label}${badge ? `<span class="dot">${badge}</span>` : ""}</button>`;
-  const m = me();
-  return `<header class="top">
-    <div class="top-row"><div class="brand"><img src="logo-blanc.png" alt="Groupama-FDJ UNITED"><h1>MAGAZINE</h1></div>
-      <div class="me"><span>${esc(m?.name || S.user.name || S.user.email)}${DEMO ? " · démo (rien n'est enregistré)" : ""}</span><button class="btn small" data-act="signout">Quitter</button></div></div>
-    <nav class="tabs">${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}<span class="tabgap"></span>
-      ${tab("desk", "Desk")}${tab("plan", "Planning de prod")}${isAdmin() ? tab("admin", "Admin") : ""}</nav></header>`;
+  const tab = (id, label, badge) => `<button class="${S.tab === id ? "on" : ""}" data-act="tab" data-tab="${id}">${label}${badge ? `<span class="nav-badge">${badge}</span>` : ""}</button>`;
+  const m = me(), u = S.user, who = m?.name || u.name || u.email;
+  const avatar = `<button class="avatar" data-act="signout" title="Se déconnecter (${esc(u.email)})${DEMO ? " — mode démo" : ""}">${u.photo ? `<img src="${esc(u.photo)}" alt="" referrerpolicy="no-referrer">` : esc((who || "?")[0].toUpperCase())}</button>`;
+  let sub = "";
+  if (S.tab.startsWith("i:") && S.issues[S.tab.slice(2)]) {
+    const pct = Math.round(L.issueStats(S.issues[S.tab.slice(2)], S.cards).pct * 100);
+    sub = `<div class="toolbar sub"><div class="pct"><span class="lbl">Avancement de production</span><span class="num">${pct} %</span><div class="bar"><i style="width:${pct}%"></i></div></div>${DEMO ? `<span class="pill warn push">Mode démo · rien n'est enregistré</span>` : ""}</div>`;
+  } else if (S.tab === "desk") {
+    sub = `<div class="toolbar sub">${DEMO ? `<span class="pill warn">Mode démo · rien n'est enregistré</span>` : ""}<button class="btn blue push" data-act="new-card">Nouvelle idée</button></div>`;
+  }
+  return `<div class="hdr"><header class="top"><div class="brand"><img src="logo-blanc.png" alt="Groupama-FDJ UNITED"><b>MAGAZINE</b></div>
+    <nav>${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}${tab("desk", "DESK")}${tab("plan", "PLANNING")}${isAdmin() ? tab("admin", "ADMIN") : ""}</nav>
+    <div class="top-actions">${avatar}</div></header>${sub}</div>`;
 }
 function viewHtml() {
   if (S.tab.startsWith("i:")) return issueView(S.issues[S.tab.slice(2)]);
@@ -177,9 +183,9 @@ function issueView(issue) {
         ${days !== null ? `<span class="pill grey">${days > 0 ? "J-" + days : days === 0 ? "Sortie aujourd'hui" : "Sortie passée"}</span>` : ""}
         ${st.total !== L.PAGES_TOTAL ? `<span class="pill bad">${st.total} pages au lieu de ${L.PAGES_TOTAL}</span>` : ""}
         <button class="btn small" data-act="edit-issue" data-id="${issue.id}">Modifier la date de sortie</button></div></div>
-    <div class="progress"><div class="muted small" style="font-weight:700;text-transform:uppercase">Avancement de production</div>
-      <div class="big">${pct} %</div><div class="bar"><i style="width:${pct}%"></i></div>
-      <div class="stats"><span>${st.prod} pages de rubrique</span><span>${st.noCard} sans card</span><span>${ph("a")} · ${ph("b")} · ${ph("c")} <span class="muted">(pages closes)</span></span></div>
+    <div class="progress"><div class="muted small" style="font-weight:700;text-transform:uppercase">Détail de l'avancement</div>
+      <div class="stats" style="margin-top:4px"><span>${st.prod} pages de rubrique</span><span>${st.noCard} sans card</span></div>
+      <div class="stats" style="margin-top:2px"><span>${ph("a")} · ${ph("b")} · ${ph("c")} <span class="muted">(pages closes)</span></span></div>
       <div class="stats" style="margin-top:2px"><span>${st.total - st.empty}/${st.total} pages attribuées</span><span>Ajustement : ${st.adjust.inter} interc. · ${st.adjust.publi} publi · ${st.adjust.pub} pub</span></div></div></div>
   ${alertsPanel(issue)}
   <div class="tools"><label class="c">Mettre en avant un chapitre&nbsp;<select data-chg="f-chapter"><option value="">Tous</option>${S.config.chapters.map((c) => `<option value="${c.id}" ${S.f.chapter === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
@@ -260,8 +266,7 @@ function cardFace(c) {
 }
 function deskView() {
   const f = S.f.desk;
-  return `<div class="head" style="grid-template-columns:1fr auto"><div><h2>DESK ÉDITORIAL</h2><div class="muted">Les idées d'angle, rattachées à une rubrique et à un numéro, avec leurs trois phases de production.</div></div>
-    <button class="btn primary" data-act="new-card">+ Nouvelle idée</button></div>
+  return `<div class="head" style="grid-template-columns:1fr"><div><h2>DESK ÉDITORIAL</h2><div class="muted">Les idées d'angle, rattachées à une rubrique et à un numéro, avec leurs trois phases de production.</div></div></div>
   <div class="tools"><input type="search" placeholder="Rechercher un angle…" value="${esc(f.q)}" data-inp="desk-q">
     <select data-chg="desk-issue">${issueOpts(f.issue, "Tous les numéros")}<option value="none" ${f.issue === "none" ? "selected" : ""}>Sans numéro</option></select>
     <select data-chg="desk-rub">${rubOpts(f.rub, "Toutes les rubriques")}</select>
@@ -287,7 +292,7 @@ function planTasks() {
 }
 function planView() {
   const f = S.f.plan, m = me();
-  return `<div class="head" style="grid-template-columns:1fr"><div><h2>PLANNING DE PROD</h2><div class="muted">Toutes les échéances des cards, filtrables par personne, numéro et phase.</div></div></div>
+  return `<div class="head" style="grid-template-columns:1fr"><div><h2>PLANNING</h2><div class="muted">Toutes les échéances des cards, filtrables par personne, numéro et phase.</div></div></div>
   <div class="tools"><select data-chg="plan-person">${peopleOpts(f.person, { none: "Toute l'équipe" })}</select>
     ${m ? `<button class="btn small" data-act="plan-me">Mes tâches</button>` : ""}
     <select data-chg="plan-issue">${issueOpts(f.issue, "Tous les numéros")}</select>

@@ -37,17 +37,26 @@ input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--ink); marg
 label.f { display: block; } label.f > span { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin-bottom: 2px; text-transform: uppercase; letter-spacing: .03em; }
 label.c { display: inline-flex; gap: 7px; align-items: center; font-weight: 600; font-size: 13px; }
 
-/* En-tête */
-.top { background: var(--ink); color: #fff; position: sticky; top: 0; z-index: 20; }
-.top-row { display: flex; align-items: center; gap: 14px; padding: 8px 18px; }
-.brand { display: flex; align-items: center; gap: 12px; } .brand img { height: 34px; } .brand h1 { font-size: 26px; }
-.me { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #D7DCE6; }
-.me .btn { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
-.tabs { display: flex; gap: 2px; padding: 0 14px; overflow-x: auto; scrollbar-width: none; }
-.tab { background: none; border: 0; color: #B8C1D6; padding: 9px 14px; font-weight: 700; font-size: 13.5px; border-bottom: 3px solid transparent; white-space: nowrap; display: inline-flex; gap: 7px; align-items: center; }
-.tab:hover { color: #fff; } .tab.on { color: #fff; border-bottom-color: var(--red); }
-.tab .sep { width: 1px; background: rgba(255,255,255,.2); align-self: stretch; }
-.dot { min-width: 18px; height: 18px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; display: inline-grid; place-items: center; padding: 0 5px; }
+/* En-tête : même présentation que l'outil de planning */
+.hdr { position: sticky; top: 0; z-index: 20; }
+.top { display: flex; align-items: center; gap: 18px; padding: 8px 20px; padding-top: max(8px, env(safe-area-inset-top)); background: var(--ink) url("fond-sombre.jpg") right bottom / cover no-repeat; color: #fff; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); }
+.brand img { height: 46px; width: auto; }
+.brand b { font-size: 26px; font-weight: 400; letter-spacing: .04em; line-height: 1; padding-top: 3px; }
+.top nav { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.top nav button { background: transparent; border: 0; color: #D7DCE6; padding: 6px 12px; border-radius: var(--r-s); font-family: var(--display); font-size: 21px; font-weight: 400; letter-spacing: .03em; white-space: nowrap; }
+.top nav button:hover { color: #fff; } .top nav button.on { background: rgba(255,255,255,.12); color: #fff; }
+.top-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; border: 0; background: #203360; color: #fff; font-weight: 700; overflow: hidden; padding: 0; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 5px; border-radius: 99px; background: var(--red); color: #fff; font-family: var(--body); font-size: 11px; font-weight: 700; vertical-align: 2px; }
+.toolbar.sub { display: flex; gap: 14px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--surface); min-height: 54px; }
+.toolbar.sub .pct { display: flex; align-items: center; gap: 12px; }
+.toolbar.sub .pct .lbl { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); }
+.toolbar.sub .pct .num { font-family: var(--display); font-size: 30px; line-height: 1; }
+.toolbar.sub .pct .bar { width: 220px; margin: 0; }
+.toolbar.sub .push { margin-left: auto; }
+.btn.blue { background: var(--blue); border-color: var(--blue); color: #fff; } .btn.blue:hover { background: #00568F; }
 main { padding: 18px; max-width: 1500px; margin: 0 auto; }
 .tabgap { width: 14px; }
 
@@ -133,5 +142,5 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 @media (max-width: 720px) {
   .head { grid-template-columns: 1fr; } .progress { min-width: 0; } .g2, .g3, .g4 { grid-template-columns: 1fr; }
   .row { grid-template-columns: 52px 1fr 28px; } .row > :nth-child(2), .row > :nth-child(4), .row > :nth-child(5) { grid-column: 2 / 4; }
-  .brand h1 { font-size: 20px; } .me span { display: none; }
+  .brand b { font-size: 20px; } .brand img { height: 36px; } .top { gap: 10px; padding: 6px 12px; } .toolbar.sub .pct .bar { width: 110px; }
 }
