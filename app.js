@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=2";
-import { firebaseStore, memoryStore } from "./store.js?v=2";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=2";
+import * as L from "./logic.js?v=3";
+import { firebaseStore, memoryStore } from "./store.js?v=3";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=3";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,7 +52,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=2")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=3")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -164,7 +164,7 @@ function issueView(issue) {
   if (!issue) return "";
   const st = L.issueStats(issue, S.cards);
   const days = issue.releaseDate ? L.diffDays(S.d.today, issue.releaseDate) : null;
-  const pages = L.pagesSorted(issue);
+  const pages = L.resolvedPages(issue, S.cards);
   const sp = L.spreads(pages);
   const lateCards = new Set(S.d.alerts.late.map((t) => t.cardId));
   const pct = Math.round(st.pct * 100);
@@ -198,7 +198,7 @@ function tile(p, lateCards) {
   const conflict = card && L.cardAlerts(card, S.issues[card.issueId], S.d.today, S.d.imminent).conflicts.length;
   const body = p.type === "rub" ? (card ? `<div class="t">${esc(card.title)}</div>` : `<div class="k">Sans card</div>`) : p.type === "empty" ? "" : `<div class="k">${esc(p.label || "")}</div>`;
   return `<div class="pg ${dim ? "dim" : ""} ${card && lateCards.has(card.id) ? "late" : ""}" role="button" tabindex="0" draggable="true" data-act="page" data-id="${p.id}" data-drop="${p.id}"
-      style="${col ? `--c:${col.hex};--t:${col.text}` : ""}" title="${esc(pageTitle(p))}">
+      style="${col ? `--c:${col.hex};--t:${col.text}` : ""}" title="${esc(pageTitle(p))}${p.auto ? " · card liée automatiquement" : ""}">
     <div class="pg-top"><b>${p.pos}</b><span>${esc(pageTitle(p))}</span></div>
     <div class="pg-body">${body}</div>
     <div class="pg-foot">${card ? segs(card) : ""}</div>${conflict ? `<span class="warn-flag" title="Conflit de dates">!</span>` : ""}</div>`;
@@ -247,7 +247,7 @@ function filteredCards() {
 }
 function cardFace(c) {
   const rub = rubOf(c.rubId), col = rub && colorOf(rub.color), s = cardState(c), issue = S.issues[c.issueId];
-  const pages = issue ? L.fmtPages(L.cardPagePositions(issue, c.id)) : "";
+  const pages = issue ? L.fmtPages(L.cardPagePositions(issue, c.id, S.cards)) : "";
   const next = L.cardTasks(c).filter((t) => t.closable && !t.done && t.date).sort((a, b) => a.date.localeCompare(b.date))[0];
   const late = s.al.late[0];
   return `<div class="card ${s.al.conflicts.length ? "conflict" : ""}" role="button" tabindex="0" data-act="open-card" data-id="${c.id}" style="--c:${col?.hex || "#8494A8"}">
@@ -352,9 +352,13 @@ function issueModalHtml() {
 function pageModalHtml() {
   const issue = S.issues[S.modal.issueId], raw = issue?.pages?.[S.modal.slotId];
   if (!raw) return "";
-  const p = { id: S.modal.slotId, ...raw }, card = p.cardId ? S.cards[p.cardId] : null;
+  const p = { id: S.modal.slotId, ...raw };
+  const res = L.resolvedPages(issue, S.cards).find((x) => x.id === p.id);
+  const card = res?.cardId ? S.cards[res.cardId] : null;
+  const same = cardsArr().filter((c) => c.issueId === issue.id && c.rubId === p.rubId);
   const cands = cardsArr().filter((c) => c.issueId === issue.id || !c.issueId).sort((a, b) => (b.rubId === p.rubId) - (a.rubId === p.rubId) || a.title.localeCompare(b.title));
-  const cardSel = p.type === "rub" ? `<label class="f"><span>Card du desk</span><select data-chg="pg-card"><option value="">— Aucune —</option>${cands.map((c) => `<option value="${c.id}" ${c.id === p.cardId ? "selected" : ""}>${esc(c.title)} · ${esc(rubOf(c.rubId)?.name || "?")}${c.issueId ? "" : " (sans numéro)"}</option>`).join("")}<option value="__new">+ Créer une nouvelle card pour cette page…</option></select></label>` : "";
+  const autoNote = res?.auto ? `<div class="muted small" style="margin-top:4px">Card liée automatiquement : c'est la seule card de « ${esc(rubOf(p.rubId)?.name || "")} » dans ce numéro (elle s'applique à toutes les pages de la rubrique).</div>` : p.type === "rub" && p.rubId && !p.cardId && same.length > 1 ? `<div class="box-warn" style="margin-top:6px">${same.length} cards existent pour cette rubrique dans ce numéro : choisis laquelle va sur cette page.</div>` : "";
+  const cardSel = p.type === "rub" ? `<label class="f"><span>Card du desk</span><select data-chg="pg-card"><option value="" ${!p.cardId ? "selected" : ""}>Automatique (card de la rubrique dans ce numéro)</option><option value="-" ${p.cardId === "-" ? "selected" : ""}>Aucune card sur cette page</option>${cands.map((c) => `<option value="${c.id}" ${c.id === p.cardId ? "selected" : ""}>${esc(c.title)} · ${esc(rubOf(c.rubId)?.name || "?")}${c.issueId ? "" : " (sans numéro)"}</option>`).join("")}<option value="__new">+ Créer une nouvelle card pour cette page…</option></select></label>${autoNote}` : "";
   return `<div class="modal"><header><h3>PAGE ${p.pos} · N°${issue.number}</h3><button class="x" data-act="close">✕</button></header><div class="body">
     <div class="grid g2"><label class="f"><span>Type de page</span><select data-chg="pg-type">${Object.entries(L.PAGE_TYPES).map(([k, v]) => `<option value="${k}" ${p.type === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       ${p.type === "rub" ? `<label class="f"><span>Rubrique</span><select data-chg="pg-rub">${rubOpts(p.rubId, "— Choisir —")}</select></label>` : p.type !== "empty" ? `<label class="f"><span>Mention (annonceur, thème…)</span><input type="text" data-chg="pg-label" value="${esc(p.label)}"></label>` : "<div></div>"}</div>
@@ -410,7 +414,7 @@ function cardModalHtml() {
     <div class="step"><h4>Début de conception</h4><div class="grid g2">${F.inp(d, "c.start.date", "Date de début de conception", "date")}${F.ppl(d, "c.designer", "Qui fait le graphisme")}</div><div class="muted small" style="margin-top:4px">Les échéances 1A et 1B doivent se terminer avant cette date, sinon un conflit s'affiche en rouge.</div></div>
     <div class="step"><h4>Livraison V1</h4><div class="grid g2">${F.inp(d, "c.v1.date", "Deadline V1", "date")}${F.url(d, "c.v1.url", "Lien Drive V1")}</div><div style="margin-top:6px">${F.chk(d, "c.v1.done", "V1 livrée")}</div></div>
     <div class="step"><h4>Livraison vdef</h4><div class="grid g3">${F.inp(d, "c.vdef.date", "Deadline vdef", "date")}${F.url(d, "c.vdef.url", "Lien Drive vdef (différent de la V1)")}${F.ppl(d, "c.vdef.validator", "Qui valide")}</div><div style="margin-top:6px">${F.chk(d, "c.vdef.done", "Vdef validée")}</div></div>`);
-  const issue = S.issues[d.issueId], pages = issue && S.modal.id ? L.fmtPages(L.cardPagePositions(issue, S.modal.id)) : "";
+  const issue = S.issues[d.issueId], pages = issue && S.modal.id ? L.fmtPages(L.cardPagePositions(issue, S.modal.id, S.cards)) : "";
   return `<div class="modal"><header><h3>${isNew ? "NOUVELLE IDÉE" : "CARD"}</h3><button class="x" data-act="close-card">✕</button></header><div class="body">
     <div class="grid g3" style="grid-template-columns:2fr 1fr 1fr">${F.inp(d, "title", "Angle éditorial (titre)")}${F.sel(d, "rubId", "Rubrique", rubOpts(d.rubId, "— Choisir —"))}${F.sel(d, "issueId", "Numéro du magazine", issueOpts(d.issueId, "— Pas encore affecté —"))}</div>
     ${pages ? `<div class="muted small" style="margin-top:4px">Placée sur le chemin de fer : ${pages}</div>` : ""}

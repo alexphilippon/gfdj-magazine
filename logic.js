@@ -190,6 +190,28 @@ export function initialPages(n = PAGES_TOTAL) {
 }
 export const pagesSorted = (issue) => Object.entries(issue?.pages || {}).map(([id, p]) => ({ id, ...p })).sort((a, b) => a.pos - b.pos);
 
+/** Lien automatique : si une seule card du desk vise (rubrique, numéro), elle s'applique à toutes les pages de cette rubrique.
+ *  `cardId` d'une page : "" = automatique, "-" = volontairement sans card, sinon lien explicite. */
+export function autoCardMap(issue, cardsById) {
+  const byRub = {};
+  for (const c of Object.values(cardsById || {})) {
+    if (!c.rubId || !issue?.id || c.issueId !== issue.id) continue;
+    (byRub[c.rubId] ||= []).push(c.id);
+  }
+  const m = {};
+  for (const [r, ids] of Object.entries(byRub)) if (ids.length === 1) m[r] = ids[0];
+  return m;
+}
+export function effCardId(page, autoMap) {
+  if (page.type !== "rub" || page.cardId === "-") return "";
+  return page.cardId || autoMap[page.rubId] || "";
+}
+/** Pages triées avec `cardId` effectif (explicite ou automatique) et `auto` = lien automatique. */
+export function resolvedPages(issue, cardsById) {
+  const m = autoCardMap(issue, cardsById);
+  return pagesSorted(issue).map((p) => { const eff = effCardId(p, m); return { ...p, rawCardId: p.cardId || "", cardId: eff, auto: !p.cardId && !!eff }; });
+}
+
 /** Doubles pages : la 1re et la dernière (couvertures) seules, le reste par paires. */
 export function spreads(pages) {
   if (!pages.length) return [];
@@ -245,8 +267,8 @@ export function cloneStructure(issue) {
   return o;
 }
 
-export function cardPagePositions(issue, cardId) {
-  return pagesSorted(issue).filter((p) => p.cardId === cardId).map((p) => p.pos);
+export function cardPagePositions(issue, cardId, cardsById) {
+  return resolvedPages(issue, cardsById).filter((p) => p.cardId === cardId).map((p) => p.pos);
 }
 export function fmtPages(pos) {
   if (!pos.length) return "";
@@ -258,12 +280,12 @@ export function fmtPages(pos) {
 
 /* ---------- Avancement d'un numéro ---------- */
 export function issueStats(issue, cardsById) {
-  const pages = pagesSorted(issue);
+  const pages = resolvedPages(issue, cardsById);
   const prod = pages.filter((p) => p.type === "rub");
   const fr = prod.map((p) => { const c = cardsById[p.cardId]; return c ? cardProgress(c) : 0; });
   const byPhase = {};
   for (const ph of PHASE_KEYS) {
-    const on = prod.filter((p) => cardsById[p.cardId]?.phases?.[ph] !== false && cardsById[p.cardId]);
+    const on = prod.filter((p) => cardsById[p.cardId] && cardsById[p.cardId].phases?.[ph] !== false);
     byPhase[ph] = { closed: on.filter((p) => phaseProgress(cardsById[p.cardId], ph).closed).length, total: on.length };
   }
   return {

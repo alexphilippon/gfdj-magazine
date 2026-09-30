@@ -165,3 +165,31 @@ test("appliquer aux X pages suivantes : rubrique, mention, card optionnelle, bor
   apply(issue, patch); assert.equal(issue.pages.s72.type, "publi"); assert.equal(issue.pages.s72.label, "Pub X");
   assert.equal(L.applyNextPatch(issue, "s10", 0).targets.length, 0);
 });
+
+test("lien automatique card ↔ pages de la rubrique dans le numéro", () => {
+  const issue = { id: "i1", pages: L.initialPages() };
+  issue.pages.s20 = { pos: 20, type: "rub", rubId: "r-data", cardId: "", label: "" };
+  issue.pages.s21 = { pos: 21, type: "rub", rubId: "r-data", cardId: "", label: "" };
+  issue.pages.s22 = { pos: 22, type: "rub", rubId: "r-autre", cardId: "", label: "" };
+  const c = { id: "cA", ...L.emptyCard({ defaults: D, rubId: "r-data", issueId: "i1", title: "Sprint" }) };
+  let res = L.resolvedPages(issue, { cA: c });
+  assert.equal(res[19].cardId, "cA"); assert.equal(res[20].cardId, "cA"); assert.equal(res[19].auto, true);
+  assert.equal(res[21].cardId, ""); // autre rubrique : pas de card
+  assert.deepEqual(L.cardPagePositions(issue, "cA", { cA: c }), [20, 21]);
+  // une card d'un autre numéro ne s'applique pas
+  assert.equal(L.resolvedPages(issue, { cA: { ...c, issueId: "i2" } })[19].cardId, "");
+  // deux cards pour la même rubrique : ambigu, aucun lien automatique
+  const c2 = { ...c, id: "cB", title: "Autre" };
+  assert.equal(L.resolvedPages(issue, { cA: c, cB: c2 })[19].cardId, "");
+  // lien explicite prioritaire, et "-" = pas de card
+  issue.pages.s20.cardId = "cB"; issue.pages.s21.cardId = "-";
+  res = L.resolvedPages(issue, { cA: c, cB: c2 });
+  assert.equal(res[19].cardId, "cB"); assert.equal(res[20].cardId, "");
+  // avancement : les 2 pages comptent avec la card
+  const issue2 = { id: "i1", pages: L.initialPages() };
+  issue2.pages.s20 = { pos: 20, type: "rub", rubId: "r-data", cardId: "", label: "" };
+  issue2.pages.s21 = { pos: 21, type: "rub", rubId: "r-data", cardId: "", label: "" };
+  const done = { ...c }; done.a.v1.done = done.a.vdef.done = true; done.a.recolte.skip = true; done.phases.b = false; done.phases.c = false;
+  const st = L.issueStats(issue2, { cA: done });
+  assert.equal(st.noCard, 0); assert.equal(st.pct, 1);
+});
