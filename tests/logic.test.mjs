@@ -193,3 +193,18 @@ test("lien automatique card ↔ pages de la rubrique dans le numéro", () => {
   const st = L.issueStats(issue2, { cA: done });
   assert.equal(st.noCard, 0); assert.equal(st.pct, 1);
 });
+
+test("page complète / validée : la validation ne compte que si la card est toujours complète", () => {
+  const c = { id: "c1", ...L.emptyCard({ defaults: D, rubId: "r1", issueId: "i1", title: "T" }) };
+  assert.equal(L.isPageComplete(c), false);
+  Object.assign(c.a.recolte, { skip: true }); c.a.v1.done = c.a.vdef.done = true;
+  c.b.brief.done = c.b.shoot.done = c.b.delivery.done = true; c.c.v1.done = c.c.vdef.done = true;
+  assert.equal(L.isPageComplete(c), true);
+  const issue = { id: "i1", pages: L.initialPages() };
+  issue.pages.s05 = { pos: 5, type: "rub", rubId: "r1", cardId: "c1", label: "", celebrated: true };
+  issue.pages.s06 = { pos: 6, type: "rub", rubId: "r1", cardId: "c1", label: "" };
+  assert.equal(L.issueStats(issue, { c1: c }).validated, 1);
+  c.c.vdef.done = false; // réouverture : la validation ne compte plus
+  assert.equal(L.issueStats(issue, { c1: c }).validated, 0);
+  c.phases = { a: false, b: false, c: false }; assert.equal(L.isPageComplete(c), false);
+});

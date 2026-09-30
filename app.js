@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=4";
-import { firebaseStore, memoryStore } from "./store.js?v=4";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=4";
+import * as L from "./logic.js?v=5";
+import { firebaseStore, memoryStore } from "./store.js?v=5";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=5";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,7 +52,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=4")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=5")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -120,8 +120,8 @@ function headerHtml() {
   const avatar = `<button class="avatar" data-act="signout" title="Se déconnecter (${esc(u.email)})${DEMO ? " — mode démo" : ""}">${u.photo ? `<img src="${esc(u.photo)}" alt="" referrerpolicy="no-referrer">` : esc((who || "?")[0].toUpperCase())}</button>`;
   let sub = "";
   if (S.tab.startsWith("i:") && S.issues[S.tab.slice(2)]) {
-    const pct = Math.round(L.issueStats(S.issues[S.tab.slice(2)], S.cards).pct * 100);
-    sub = `<div class="toolbar sub"><div class="pct"><span class="lbl">Avancement de production</span><span class="num">${pct} %</span><div class="bar"><i style="width:${pct}%"></i></div></div>${DEMO ? `<span class="pill warn push">Mode démo · rien n'est enregistré</span>` : ""}</div>`;
+    const stx = L.issueStats(S.issues[S.tab.slice(2)], S.cards), pct = Math.round(stx.pct * 100);
+    sub = `<div class="toolbar sub"><div class="pct"><span class="lbl">Avancement de production</span><span class="num">${pct} %</span><div class="bar"><i style="width:${pct}%"></i></div><span class="lbl" style="margin-left:6px">${stx.validated}/${stx.total} pages validées</span></div>${DEMO ? `<span class="pill warn push">Mode démo · rien n'est enregistré</span>` : ""}</div>`;
   } else if (S.tab === "desk") {
     sub = `<div class="toolbar sub">${DEMO ? `<span class="pill warn">Mode démo · rien n'est enregistré</span>` : ""}<button class="btn blue push" data-act="new-card">Nouvelle idée</button></div>`;
   }
@@ -207,7 +207,7 @@ function tile(p, lateCards) {
       style="${col ? `--c:${col.hex};--t:${col.text}` : ""}" title="${esc(pageTitle(p))}${p.auto ? " · card liée automatiquement" : ""}">
     <div class="pg-top"><b>${p.pos}</b><span>${esc(pageTitle(p))}</span></div>
     <div class="pg-body">${body}</div>
-    <div class="pg-foot">${card ? segs(card) : ""}</div>${conflict ? `<span class="warn-flag" title="Conflit de dates">!</span>` : ""}</div>`;
+    <div class="pg-foot">${card ? segs(card) : ""}</div>${conflict ? `<span class="warn-flag" title="Conflit de dates">!</span>` : p.celebrated && card && L.isPageComplete(card) ? `<span class="ok-flag" title="Page validée">✓</span>` : ""}</div>`;
 }
 
 function taskLine(t) {
@@ -371,8 +371,26 @@ function pageModalHtml() {
     ${p.type !== "empty" ? `<div class="panel" style="margin:12px 0 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Appliquer aussi aux</b><input type="number" id="pg-count" min="1" max="${L.pagesSorted(issue).length - p.pos}" value="1" style="width:74px"><b>pages suivantes</b>${p.type === "rub" && p.cardId ? `<label class="c"><input type="checkbox" id="pg-count-card" checked> même card</label>` : ""}<button class="btn small primary" data-act="pg-apply">Appliquer</button><span class="muted small">Recopie le type${p.type === "rub" ? ", la rubrique" : " et la mention"} sur les pages ${p.pos + 1} à …</span></div>` : ""}
     ${p.type === "rub" && p.rubId ? `<div class="muted small" style="margin-top:6px">Chapitre : ${esc(chapOf(rubOf(p.rubId)?.chapterId)?.name || "—")}</div>` : ""}
     ${["inter", "publi", "pub"].includes(p.type) ? `<div class="box-warn">Page d'ajustement hors chemin de fer : elle aide à atteindre ${L.PAGES_TOTAL} pages et n'entre pas dans le calcul d'avancement.</div>` : ""}
+    ${celebrateBlock(p, card)}
     ${card ? pageCardPanel(card) : ""}</div>
     <footer><button class="btn" data-act="pg-insert">Insérer une page avant</button><button class="btn danger" data-act="pg-remove">Retirer cette page</button><span style="flex:1"></span><button class="btn primary" data-act="close">Fermer</button></footer></div>`;
+}
+function celebrateBlock(p, card) {
+  if (p.type !== "rub" || !card || !L.isPageComplete(card)) return "";
+  if (p.celebrated) return `<div class="celebrate done"><span class="pill ok">Page validée</span><button class="btn small" data-act="celebrate-play">Rejouer la célébration</button><button class="btn small ghost" data-act="celebrate-undo">Annuler la validation</button></div>`;
+  return `<div class="celebrate"><button class="bigbtn" data-act="celebrate" title="Valider la page et célébrer"><img src="celebration-still.jpg" alt=""><span>Toutes les phases sont closes.<br><b>Appuie sur le bouton pour valider la page !</b></span></button></div>`;
+}
+let gifBytes = null;
+async function playCelebration() {
+  try {
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=5")).arrayBuffer();
+    const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
+    $("#celebrate")?.remove();
+    const el = document.createElement("div"); el.id = "celebrate";
+    el.innerHTML = `<img src="${url}" alt="Page validée !">`;
+    const end = () => { el.remove(); URL.revokeObjectURL(url); };
+    el.addEventListener("click", end); document.body.appendChild(el); setTimeout(end, 3600);
+  } catch (e) { toast("Page validée !"); }
 }
 function pageCardPanel(card) {
   const issue = S.issues[card.issueId], al = L.cardAlerts(card, issue, S.d.today, S.d.imminent);
@@ -566,7 +584,11 @@ async function deleteCard() {
   try { await unlinkCard(id, null); await S.store.delDoc("magCards/" + id); closeModal(); toast("Card supprimée"); } catch (e) { fail(e); }
 }
 const findTask = (card, ds) => L.cardTasks(card).find((t) => t.phase === ds.phase && t.key === ds.key && (t.sub || "") === (ds.sub || ""));
-const pagePatch = (issue, slotId, over) => { const { pos, type, rubId, cardId, label } = { ...issue.pages[slotId], ...over }; return { [`pages.${slotId}`]: { pos, type, rubId: rubId || "", cardId: cardId || "", label: label || "" } }; };
+const pagePatch = (issue, slotId, over) => {
+  const { pos, type, rubId, cardId, label, celebrated } = { ...issue.pages[slotId], ...over };
+  const keep = !("type" in over || "rubId" in over || "cardId" in over); // changer de rubrique/card annule la validation
+  return { [`pages.${slotId}`]: { pos, type, rubId: rubId || "", cardId: cardId || "", label: label || "", celebrated: keep && !!celebrated } };
+};
 
 async function onChange(e) {
   const t = e.target;
@@ -611,6 +633,9 @@ const ACT = {
     run(S.store.updateDoc(`magIssues/${id}`, patch)).then(() => { closeModal(); toast("Date de sortie enregistrée"); });
   },
   page: (el) => openModal({ kind: "page", issueId: S.tab.slice(2), slotId: el.dataset.id, live: true }),
+  celebrate: () => { const i = S.issues[S.modal.issueId]; playCelebration(); run(S.store.updateDoc(`magIssues/${i.id}`, { [`pages.${S.modal.slotId}.celebrated`]: true })); },
+  "celebrate-play": () => playCelebration(),
+  "celebrate-undo": () => { const i = S.issues[S.modal.issueId]; run(S.store.updateDoc(`magIssues/${i.id}`, { [`pages.${S.modal.slotId}.celebrated`]: false })); },
   "pg-apply": async () => {
     const issue = S.issues[S.modal.issueId], id = S.modal.slotId;
     const n = Math.floor(+$("#pg-count").value);

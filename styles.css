@@ -144,3 +144,13 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
   .row { grid-template-columns: 52px 1fr 28px; } .row > :nth-child(2), .row > :nth-child(4), .row > :nth-child(5) { grid-column: 2 / 4; }
   .brand b { font-size: 20px; } .brand img { height: 36px; } .top { gap: 10px; padding: 6px 12px; } .toolbar.sub .pct .bar { width: 110px; }
 }
+
+/* Célébration d'une page validée */
+.ok-flag { position: absolute; right: 4px; top: 4px; background: var(--green); color: #fff; border-radius: 50%; width: 17px; height: 17px; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
+.celebrate { margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bigbtn { display: flex; align-items: center; gap: 16px; width: 100%; text-align: left; background: #fff; border: 2px solid var(--red); border-radius: var(--r-m); padding: 8px 16px 8px 8px; }
+.bigbtn:hover { background: var(--red-soft); } .bigbtn:active { transform: scale(.985); }
+.bigbtn img { width: 96px; border-radius: var(--r-s); } .bigbtn b { font-family: var(--display); font-weight: 400; font-size: 26px; letter-spacing: .03em; color: var(--red); line-height: 1.1; }
+#celebrate { position: fixed; inset: 0; z-index: 200; background: rgba(20,27,52,.62); display: grid; place-items: center; cursor: pointer; }
+#celebrate img { width: min(340px, 82vw); border-radius: 16px; box-shadow: 0 12px 50px rgba(0,0,0,.5); animation: pop .32s cubic-bezier(.2,1.6,.4,1); }
+@keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }

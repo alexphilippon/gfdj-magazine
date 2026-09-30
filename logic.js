@@ -125,6 +125,12 @@ export function cardProgress(card) {
 /* ---------- Retards, imminence, conflits ---------- */
 const openTasks = (card) => cardTasks(card).filter((t) => t.closable && !t.done);
 
+/** Page « finie » : au moins une phase active et toutes les phases actives closes. */
+export function isPageComplete(card) {
+  const on = PHASE_KEYS.filter((p) => card.phases?.[p] !== false);
+  return on.length > 0 && on.every((p) => phaseProgress(card, p).closed);
+}
+
 export function phaseStatus(card, ph, today, imminent = IMMINENT_DEFAULT) {
   if (card.phases?.[ph] === false) return "off";
   if (phaseProgress(card, ph).closed) return "done";
@@ -294,6 +300,7 @@ export function issueStats(issue, cardsById) {
     empty: pages.filter((p) => p.type === "empty").length,
     prod: prod.length,
     noCard: prod.filter((p) => !cardsById[p.cardId]).length,
+    validated: prod.filter((p) => p.celebrated && cardsById[p.cardId] && isPageComplete(cardsById[p.cardId])).length,
     adjust: { inter: pages.filter((p) => p.type === "inter").length, publi: pages.filter((p) => p.type === "publi").length, pub: pages.filter((p) => p.type === "pub").length },
     byPhase,
   };
