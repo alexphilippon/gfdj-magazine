@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=8";
-import { firebaseStore, memoryStore } from "./store.js?v=8";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=8";
+import * as L from "./logic.js?v=9";
+import { firebaseStore, memoryStore } from "./store.js?v=9";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=9";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -10,7 +10,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 /* ---------- État ---------- */
 const S = {
   store: null, user: null, config: null, access: null, issues: {}, cards: {}, tab: "", error: "", seeding: false, subs: [],
-  modal: null, drag: null, d: null,
+  modal: null, drag: null, d: null, req: null, reqs: {}, reqWatch: null, retried: false,
   f: {
     chapter: "", lateOnly: false,
     desk: { q: "", issue: "", rub: "", person: "", state: "" },
@@ -52,17 +52,29 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=8")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=9")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
 
 function unsubAll() { S.subs.forEach((u) => u && u()); S.subs = []; }
-function onUser(u) {
+function onUser(u, retry = false) {
   unsubAll();
+  if (!retry) S.retried = false;
+  S.req = null; S.reqs = {}; S.reqWatch = null;
   S.user = u; S.error = ""; S.issuesLoaded = false; S.config = null; S.access = null; S.issues = {}; S.cards = {};
   if (!u) return render();
-  const fail = (e) => { if (!S.error) { S.error = e?.code === "permission-denied" ? "denied" : "err:" + (e?.message || e); render(); } };
+  const fail = (e) => {
+    if (S.error) return;
+    S.error = e?.code === "permission-denied" ? "denied" : "err:" + (e?.message || e);
+    if (S.error === "denied") { // on suit sa demande d'accès : dès qu'un admin l'accepte, on réessaie tout seul
+      S.subs.push(S.store.watchDoc("magAccessRequests/" + S.user.email, (r) => {
+        S.req = r; render();
+        if (r?.status === "approved" && !S.retried) { S.retried = true; setTimeout(() => onUser(S.user, true), 800); }
+      }, () => {}));
+    }
+    render();
+  };
   S.subs.push(S.store.watchDoc("magConfig/main", (c) => {
     if (c === null) { if (!S.seeding) { S.seeding = true; bootstrap().catch(fail); } return; }
     S.config = c; render();
@@ -78,6 +90,19 @@ async function bootstrap() {
   await S.store.setDoc("magConfig/access", syncAccess(cfg, S.user.email));
   for (const i of SEED_ISSUES) await S.store.setDoc(`magIssues/${i.id}`, newIssueDoc(i));
 }
+function ensureReqWatch() {
+  if (S.reqWatch || !S.config || !isAdmin()) return;
+  S.reqWatch = S.store.watchCol("magAccessRequests", (m) => { S.reqs = m; render(); }, () => {});
+  S.subs.push(S.reqWatch);
+}
+const pendingReqs = () => Object.values(S.reqs || {}).filter((r) => r.status === "pending").sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0));
+const norm = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function guessPerson(name) {
+  const toks = norm(name).split(/[^a-z]+/).filter(Boolean);
+  if (!toks.length) return "";
+  const hit = people().filter((p) => { const pt = norm(p.name).split(/[^a-z]+/).filter(Boolean); return pt.length && pt.every((t) => toks.includes(t)); });
+  return hit.length === 1 ? hit[0].id : "";
+}
 async function saveConfig(cfg, { access = false } = {}) {
   await S.store.setDoc("magConfig/main", cfg);
   if (access) await S.store.setDoc("magConfig/access", syncAccess(cfg));
@@ -92,16 +117,23 @@ const run = (p) => Promise.resolve(p).catch(fail);
 function render() {
   const root = $("#app");
   if (!S.user) {
-    root.innerHTML = `<div class="gate"><div class="gate-box"><h1>MAGAZINE · SUIVI DE PROD</h1><p>Groupama-FDJ UNITED — chemin de fer, desk et planning de production du magazine trimestriel.</p><button class="btn" data-act="signin">Se connecter avec Google</button></div></div>`;
+    root.innerHTML = `<div class="gate"><div class="gate-box"><h1>MAGAZINE · SUIVI DE PROD</h1><p>Groupama-FDJ UNITED — chemin de fer, desk et planning de production du magazine trimestriel.</p><button class="btn" data-act="signin">Se connecter avec Google</button><p class="small" style="margin:12px 0 0">Ton adresse n'est pas encore autorisée ? Connecte-toi quand même avec Google : tu pourras demander l'accès juste après.</p></div></div>`;
     return;
   }
   if (S.error) {
-    const denied = S.error === "denied";
-    root.innerHTML = `<div class="gate"><div class="gate-box"><h1>${denied ? "ACCÈS NON AUTORISÉ" : "ERREUR"}</h1><p>${denied ? `L'adresse <b>${esc(S.user.email)}</b> n'est pas encore autorisée. Demande à un admin de l'ajouter (Admin → Personnes).` : esc(S.error.replace(/^err:/, ""))}</p><button class="btn" data-act="signout">Changer de compte</button></div></div>`;
+    const denied = S.error === "denied", r = S.req, em = esc(S.user.email);
+    let body;
+    if (!denied) body = esc(S.error.replace(/^err:/, ""));
+    else if (r?.status === "pending") body = `Ta demande d'accès pour <b>${em}</b> a bien été envoyée. Un admin va la traiter : cette page se débloquera toute seule dès que ce sera fait.`;
+    else if (r?.status === "rejected") body = `La demande d'accès pour <b>${em}</b> a été refusée. Contacte un admin de l'équipe magazine.`;
+    else if (r?.status === "approved") body = `Accès accordé pour <b>${em}</b> — ouverture en cours…`;
+    else body = `L'adresse <b>${em}</b> n'est pas encore autorisée. Tu peux demander l'accès : un admin te reliera à ton nom dans l'équipe.<br><br><button class="btn" data-act="req-send">Demander l'accès</button>`;
+    root.innerHTML = `<div class="gate"><div class="gate-box"><h1>${denied ? "ACCÈS NON AUTORISÉ" : "ERREUR"}</h1><p>${body}</p><button class="btn ghost" style="color:#fff;border-color:rgba(255,255,255,.4)" data-act="signout">Changer de compte</button></div></div>`;
     return;
   }
   if (!S.config) { root.innerHTML = `<div class="boot">${S.seeding ? "Initialisation de l'outil…" : "Chargement…"}</div>`; return; }
   derive();
+  ensureReqWatch();
   if (!S.tab || (S.tab.startsWith("i:") && !S.issues[S.tab.slice(2)])) {
     const list = issueList();
     const next = list.find((i) => i.releaseDate >= S.d.today) || list[0];
@@ -126,7 +158,7 @@ function headerHtml() {
     sub = `<div class="toolbar sub">${DEMO ? `<span class="pill warn">Mode démo · rien n'est enregistré</span>` : ""}<button class="btn blue push" data-act="new-card">Nouvelle idée</button></div>`;
   }
   return `<div class="hdr"><header class="top"><div class="brand"><img src="logo-blanc.png" alt="Groupama-FDJ UNITED"><b>MAGAZINE</b></div>
-    <nav>${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}${tab("desk", "DESK")}${tab("plan", "PLANNING")}${isAdmin() ? tab("admin", "ADMIN") : ""}</nav>
+    <nav>${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}${tab("desk", "DESK")}${tab("plan", "PLANNING")}${isAdmin() ? tab("admin", "ADMIN", pendingReqs().length) : ""}</nav>
     <div class="top-actions">${avatar}</div></header>${sub}</div>`;
 }
 function viewHtml() {
@@ -388,7 +420,7 @@ function celebrateBlock(p, card) {
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=8")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=9")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
@@ -479,7 +511,12 @@ function adminView() {
     <td><input type="date" value="${esc(i.releaseDate)}" data-adm="iss:${i.id}:releaseDate"></td><td><label class="c"><input type="checkbox" data-adm="iss:${i.id}:releaseFinal" ${i.releaseFinal ? "checked" : ""}> définitive</label></td>
     <td class="nowrap"><button class="btn small" data-act="new-issue" data-src="${i.id}">Partir de ce numéro</button> <button class="btn small danger" data-act="del-issue" data-id="${i.id}">Supprimer</button></td></tr>`;
   const colOpts = (sel) => cfg.colors.map((c) => `<option value="${c.id}" ${c.id === sel ? "selected" : ""}>${esc(c.name)}</option>`).join("");
-  return `<div class="head" style="grid-template-columns:1fr"><div><h2>ADMINISTRATION</h2><div class="muted">Chapitres, rubriques, couleurs, équipe, accès et numéros. Chaque modification est enregistrée immédiatement.</div></div></div>
+  const pend = pendingReqs();
+  const reqHtml = pend.length ? `<div class="panel adm-sec" style="border-color:var(--red)"><h3>Demandes d'accès (${pend.length})</h3><table class="t"><tbody>${pend.map((r) => `<tr><td style="width:44px">${r.photo ? `<img src="${esc(r.photo)}" alt="" referrerpolicy="no-referrer" style="width:34px;height:34px;border-radius:50%;object-fit:cover">` : ""}</td>
+    <td><b>${esc(r.name || "(sans nom)")}</b><br><span class="muted small">${esc(r.email)}</span></td>
+    <td style="width:260px"><select data-req-person="${esc(r.email)}"><option value="">Relier à…</option>${people().map((p) => `<option value="${esc(p.id)}" ${guessPerson(r.name) === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}<option value="__new">+ Nouvelle personne (${esc(r.name || r.email)})</option></select></td>
+    <td class="nowrap" style="width:190px"><button class="btn small primary" data-act="req-ok" data-email="${esc(r.email)}">Autoriser</button> <button class="btn small danger" data-act="req-no" data-email="${esc(r.email)}">Refuser</button></td></tr>`).join("")}</tbody></table></div>` : "";
+  return `${reqHtml}<div class="head" style="grid-template-columns:1fr"><div><h2>ADMINISTRATION</h2><div class="muted">Chapitres, rubriques, couleurs, équipe, accès et numéros. Chaque modification est enregistrée immédiatement.</div></div></div>
   <div class="panel adm-sec"><h3>Numéros</h3><table class="t"><thead><tr><th>N°</th><th>Titre</th><th>Date de sortie</th><th></th><th></th></tr></thead><tbody>${issueList().map(iRow).join("")}</tbody></table><div style="margin-top:8px"><button class="btn small" data-act="new-issue">+ Nouveau numéro</button></div></div>
   <div class="panel adm-sec"><h3>Chapitres et rubriques</h3>
     ${cfg.chapters.map((ch, ci) => `<div class="adm-chap"><div class="ch"><input type="text" value="${esc(ch.name)}" data-adm="chap:${ch.id}:name"><button class="iconb" data-act="adm" data-a="chap-up" data-id="${ch.id}" title="Monter" ${ci === 0 ? "disabled" : ""}>↑</button><button class="iconb" data-act="adm" data-a="chap-down" data-id="${ch.id}" title="Descendre" ${ci === cfg.chapters.length - 1 ? "disabled" : ""}>↓</button><button class="btn small danger" data-act="adm" data-a="chap-del" data-id="${ch.id}">Supprimer</button></div>
@@ -628,6 +665,21 @@ function onDraftInput(e) {
 const ACT = {
   signin: () => S.store.signIn().catch(fail),
   signout: () => S.store.signOut(),
+  "req-send": async () => {
+    const u = S.user;
+    try { await S.store.setDoc("magAccessRequests/" + u.email, { email: u.email, name: u.name || "", photo: u.photo || "", status: "pending", createdAt: Date.now() }); toast("Demande envoyée"); }
+    catch (e) { fail(e); }
+  },
+  "req-ok": async (el) => {
+    const em = el.dataset.email, r = S.reqs[em], sel = $$("[data-req-person]").find((x) => x.dataset.reqPerson === em)?.value;
+    if (!r) return;
+    if (!sel) return toast("Choisis d'abord la personne à laquelle relier cette adresse.");
+    const cfg = structuredClone(S.config);
+    if (sel === "__new") cfg.people.push({ id: "p-" + L.uid(), name: r.name || em, emails: [em], admin: false, photographer: false });
+    else { const p = cfg.people.find((x) => x.id === sel); p.emails = [...new Set([...(p.emails || []), em])]; }
+    try { await saveConfig(cfg, { access: true }); await S.store.updateDoc("magAccessRequests/" + em, { status: "approved" }); toast(`Accès accordé à ${em}`); } catch (e) { fail(e); }
+  },
+  "req-no": (el) => run(S.store.updateDoc("magAccessRequests/" + el.dataset.email, { status: "rejected" })).then(() => toast("Demande refusée")),
   tab: (el) => { S.tab = el.dataset.tab; render(); window.scrollTo(0, 0); },
   close: () => closeModal(),
   "close-card": () => { if (confirm("Fermer sans enregistrer ?")) closeModal(); },
@@ -708,4 +760,4 @@ document.addEventListener("drop", (e) => {
   const issue = S.issues[S.tab.slice(2)];
   if (a !== b && issue?.pages[a] && issue.pages[b]) run(S.store.updateDoc(`magIssues/${issue.id}`, L.swapPatch(issue, a, b))).then(() => toast(`Pages ${issue.pages[a].pos} et ${issue.pages[b].pos} échangées`));
 });
-window.__S = S; // pour les tests
+window.__S = S; window.__render = render; // pour les tests

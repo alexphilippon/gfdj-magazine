@@ -61,5 +61,14 @@ service cloud.firestore {
       allow create, delete: if magAdmin();
     }
     match /magCards/{id}    { allow read, write: if magMember(); }
+    // Demandes d'accès : chacun peut déposer la sienne (une seule fois, identifiant = son adresse) et la relire ; les admins traitent
+    match /magAccessRequests/{em} {
+      allow create: if signedIn()
+        && request.auth.token.email.lower() == em
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['email', 'name', 'photo', 'status', 'createdAt']);
+      allow read: if magAdmin() || (signedIn() && request.auth.token.email.lower() == em);
+      allow update, delete: if magAdmin();
+    }
   }
 }

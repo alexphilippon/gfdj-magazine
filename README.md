@@ -8,6 +8,7 @@ chemin de fer de 72 pages par numéro, desk d'idées (cards à 3 phases), planni
 - Le premier compte connecté (l'admin racine des règles) initialise la structure, l'équipe et les 4 numéros.
 - **Règles Firestore** : `firestore.rules` contient les règles du planning **et** celles du magazine. Firestore n'accepte qu'un seul
   jeu de règles par projet : à publier tel quel dans la console Firebase (Firestore → Règles).
+- **Demandes d'accès** : une personne non autorisée se connecte avec Google puis clique « Demander l'accès » ; les admins la relient à son nom dans Admin (collection `magAccessRequests`).
 - **Mode démo** : `index.html?demo` — données fictives en mémoire, rien n'est écrit.
 - Tests de la logique métier : `node --test tests/logic.test.mjs`
 

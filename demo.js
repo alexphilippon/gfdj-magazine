@@ -1,6 +1,6 @@
 /* Données fictives du mode démo (?demo) : rien n'est écrit en base, tout reste en mémoire. */
-import { emptyCard, newInterview, addDays, todayIso, initialPages } from "./logic.js?v=8";
-import { seedConfig, seedAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=8";
+import { emptyCard, newInterview, addDays, todayIso, initialPages } from "./logic.js?v=9";
+import { seedConfig, seedAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=9";
 
 export function demoData() {
   const cfg = seedConfig("demo@example.org");
@@ -63,6 +63,7 @@ export function demoData() {
   set(72, "rub", "4e de couverture");
   data["magIssues/n1"] = issue;
   for (const i of SEED_ISSUES.slice(1)) data[`magIssues/${i.id}`] = newIssueDoc(i);
+  data["magAccessRequests/thomas.maheux@example.org"] = { email: "thomas.maheux@example.org", name: "Thomas Maheux", photo: "", status: "pending", createdAt: Date.now() };
   for (const [id, c] of Object.entries(cards)) data[`magCards/${id}`] = c;
   return data;
 }
