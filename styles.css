@@ -154,3 +154,4 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 #celebrate { position: fixed; inset: 0; z-index: 200; background: rgba(20,27,52,.62); display: grid; place-items: center; cursor: pointer; }
 #celebrate img { width: min(340px, 82vw); border-radius: 16px; box-shadow: 0 12px 50px rgba(0,0,0,.5); animation: pop .32s cubic-bezier(.2,1.6,.4,1); }
 @keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.bigbtn.off { cursor: default; border-color: var(--line); border-style: dashed; color: var(--ink-2); } .bigbtn.off:hover { background: #fff; } .bigbtn.off img { filter: grayscale(1); opacity: .55; } .bigbtn.off b { color: var(--ink); font-family: var(--body); font-size: 14px; letter-spacing: 0; }

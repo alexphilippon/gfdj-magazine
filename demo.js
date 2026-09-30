@@ -1,6 +1,6 @@
 /* Données fictives du mode démo (?demo) : rien n'est écrit en base, tout reste en mémoire. */
-import { emptyCard, newInterview, addDays, todayIso, initialPages } from "./logic.js?v=5";
-import { seedConfig, seedAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=5";
+import { emptyCard, newInterview, addDays, todayIso, initialPages } from "./logic.js?v=6";
+import { seedConfig, seedAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=6";
 
 export function demoData() {
   const cfg = seedConfig("demo@example.org");

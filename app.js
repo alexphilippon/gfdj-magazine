@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=5";
-import { firebaseStore, memoryStore } from "./store.js?v=5";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=5";
+import * as L from "./logic.js?v=6";
+import { firebaseStore, memoryStore } from "./store.js?v=6";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=6";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,7 +52,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=5")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=6")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -368,22 +368,27 @@ function pageModalHtml() {
     <div class="grid g2"><label class="f"><span>Type de page</span><select data-chg="pg-type">${Object.entries(L.PAGE_TYPES).map(([k, v]) => `<option value="${k}" ${p.type === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       ${p.type === "rub" ? `<label class="f"><span>Rubrique</span><select data-chg="pg-rub">${rubOpts(p.rubId, "— Choisir —")}</select></label>` : p.type !== "empty" ? `<label class="f"><span>Mention (annonceur, thème…)</span><input type="text" data-chg="pg-label" value="${esc(p.label)}"></label>` : "<div></div>"}</div>
     ${p.type === "rub" ? `<div style="margin-top:10px">${cardSel}</div>` : ""}
+    ${celebrateBlock(p, card)}
     ${p.type !== "empty" ? `<div class="panel" style="margin:12px 0 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Appliquer aussi aux</b><input type="number" id="pg-count" min="1" max="${L.pagesSorted(issue).length - p.pos}" value="1" style="width:74px"><b>pages suivantes</b>${p.type === "rub" && p.cardId ? `<label class="c"><input type="checkbox" id="pg-count-card" checked> même card</label>` : ""}<button class="btn small primary" data-act="pg-apply">Appliquer</button><span class="muted small">Recopie le type${p.type === "rub" ? ", la rubrique" : " et la mention"} sur les pages ${p.pos + 1} à …</span></div>` : ""}
     ${p.type === "rub" && p.rubId ? `<div class="muted small" style="margin-top:6px">Chapitre : ${esc(chapOf(rubOf(p.rubId)?.chapterId)?.name || "—")}</div>` : ""}
     ${["inter", "publi", "pub"].includes(p.type) ? `<div class="box-warn">Page d'ajustement hors chemin de fer : elle aide à atteindre ${L.PAGES_TOTAL} pages et n'entre pas dans le calcul d'avancement.</div>` : ""}
-    ${celebrateBlock(p, card)}
     ${card ? pageCardPanel(card) : ""}</div>
     <footer><button class="btn" data-act="pg-insert">Insérer une page avant</button><button class="btn danger" data-act="pg-remove">Retirer cette page</button><span style="flex:1"></span><button class="btn primary" data-act="close">Fermer</button></footer></div>`;
 }
 function celebrateBlock(p, card) {
-  if (p.type !== "rub" || !card || !L.isPageComplete(card)) return "";
+  if (p.type !== "rub") return "";
+  if (!card) return `<div class="celebrate"><div class="bigbtn off"><img src="celebration-still.jpg" alt=""><span>Bouton de validation de la page<br><b>Rattache une card à cette page</b> puis clôture ses phases pour pouvoir le presser.</span></div></div>`;
+  if (!L.isPageComplete(card)) {
+    const left = PH.reduce((n, ph) => { const pr = L.phaseProgress(card, ph); return n + (pr.enabled ? pr.total - pr.done : 0); }, 0);
+    return `<div class="celebrate"><div class="bigbtn off"><img src="celebration-still.jpg" alt=""><span>Bouton de validation de la page<br><b>Encore ${left} étape${left > 1 ? "s" : ""} à clôturer</b> avant de pouvoir le presser.</span></div></div>`;
+  }
   if (p.celebrated) return `<div class="celebrate done"><span class="pill ok">Page validée</span><button class="btn small" data-act="celebrate-play">Rejouer la célébration</button><button class="btn small ghost" data-act="celebrate-undo">Annuler la validation</button></div>`;
   return `<div class="celebrate"><button class="bigbtn" data-act="celebrate" title="Valider la page et célébrer"><img src="celebration-still.jpg" alt=""><span>Toutes les phases sont closes.<br><b>Appuie sur le bouton pour valider la page !</b></span></button></div>`;
 }
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=5")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=6")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
