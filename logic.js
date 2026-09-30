@@ -224,6 +224,20 @@ export function removePatch(issue, id) {
   patch[`pages.${id}`] = emptySlot(s.length);
   return patch;
 }
+/** Recopie le type / la rubrique / la mention de la page `id` sur les `count` pages suivantes (et la même card si demandé). */
+export function applyNextPatch(issue, id, count, { withCard = false } = {}) {
+  const s = pagesSorted(issue);
+  const i = s.findIndex((p) => p.id === id);
+  if (i < 0) return { patch: {}, targets: [] };
+  const src = s[i];
+  const targets = s.slice(i + 1, i + 1 + Math.max(0, Math.floor(count)));
+  const patch = {};
+  for (const t of targets) {
+    patch[`pages.${t.id}`] = { pos: t.pos, type: src.type, rubId: src.rubId || "", cardId: withCard && src.type === "rub" ? src.cardId || "" : "", label: src.label || "" };
+  }
+  return { patch, targets };
+}
+
 /** « Partir du numéro X » : chapitres/rubriques et types de pages, sans les cards ni le contenu. */
 export function cloneStructure(issue) {
   const o = {};

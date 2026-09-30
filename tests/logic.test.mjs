@@ -149,3 +149,19 @@ test("normCard complète un ancien document", () => {
   assert.equal(c.a.v1.date, "2027-01-01"); assert.equal(c.a.v1.done, false);
   assert.deepEqual(c.a.recolte.interviews, []); assert.equal(c.phases.b, true);
 });
+
+test("appliquer aux X pages suivantes : rubrique, mention, card optionnelle, borné en fin de numéro", () => {
+  const issue = { pages: L.initialPages() };
+  issue.pages.s10 = { pos: 10, type: "rub", rubId: "r1", cardId: "c1", label: "" };
+  let { patch, targets } = L.applyNextPatch(issue, "s10", 3);
+  assert.deepEqual(targets.map((p) => p.pos), [11, 12, 13]);
+  apply(issue, patch);
+  assert.equal(issue.pages.s12.type, "rub"); assert.equal(issue.pages.s12.rubId, "r1"); assert.equal(issue.pages.s12.cardId, "");
+  assert.equal(issue.pages.s12.pos, 12); assert.equal(issue.pages.s14.type, "empty");
+  ({ patch } = L.applyNextPatch(issue, "s10", 2, { withCard: true })); apply(issue, patch);
+  assert.equal(issue.pages.s11.cardId, "c1"); assert.equal(issue.pages.s12.cardId, "c1"); assert.equal(issue.pages.s13.cardId, "");
+  issue.pages.s70 = { pos: 70, type: "publi", rubId: "", cardId: "", label: "Pub X" };
+  ({ patch, targets } = L.applyNextPatch(issue, "s70", 10)); assert.equal(targets.length, 2); // 71 et 72 seulement
+  apply(issue, patch); assert.equal(issue.pages.s72.type, "publi"); assert.equal(issue.pages.s72.label, "Pub X");
+  assert.equal(L.applyNextPatch(issue, "s10", 0).targets.length, 0);
+});

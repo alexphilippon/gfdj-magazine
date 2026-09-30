@@ -1,6 +1,6 @@
-import * as L from "./logic.js";
-import { firebaseStore, memoryStore } from "./store.js";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js";
+import * as L from "./logic.js?v=2";
+import { firebaseStore, memoryStore } from "./store.js?v=2";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=2";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,7 +52,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=2")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -359,6 +359,7 @@ function pageModalHtml() {
     <div class="grid g2"><label class="f"><span>Type de page</span><select data-chg="pg-type">${Object.entries(L.PAGE_TYPES).map(([k, v]) => `<option value="${k}" ${p.type === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       ${p.type === "rub" ? `<label class="f"><span>Rubrique</span><select data-chg="pg-rub">${rubOpts(p.rubId, "— Choisir —")}</select></label>` : p.type !== "empty" ? `<label class="f"><span>Mention (annonceur, thème…)</span><input type="text" data-chg="pg-label" value="${esc(p.label)}"></label>` : "<div></div>"}</div>
     ${p.type === "rub" ? `<div style="margin-top:10px">${cardSel}</div>` : ""}
+    ${p.type !== "empty" ? `<div class="panel" style="margin:12px 0 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Appliquer aussi aux</b><input type="number" id="pg-count" min="1" max="${L.pagesSorted(issue).length - p.pos}" value="1" style="width:74px"><b>pages suivantes</b>${p.type === "rub" && p.cardId ? `<label class="c"><input type="checkbox" id="pg-count-card" checked> même card</label>` : ""}<button class="btn small primary" data-act="pg-apply">Appliquer</button><span class="muted small">Recopie le type${p.type === "rub" ? ", la rubrique" : " et la mention"} sur les pages ${p.pos + 1} à …</span></div>` : ""}
     ${p.type === "rub" && p.rubId ? `<div class="muted small" style="margin-top:6px">Chapitre : ${esc(chapOf(rubOf(p.rubId)?.chapterId)?.name || "—")}</div>` : ""}
     ${["inter", "publi", "pub"].includes(p.type) ? `<div class="box-warn">Page d'ajustement hors chemin de fer : elle aide à atteindre ${L.PAGES_TOTAL} pages et n'entre pas dans le calcul d'avancement.</div>` : ""}
     ${card ? pageCardPanel(card) : ""}</div>
@@ -601,6 +602,18 @@ const ACT = {
     run(S.store.updateDoc(`magIssues/${id}`, patch)).then(() => { closeModal(); toast("Date de sortie enregistrée"); });
   },
   page: (el) => openModal({ kind: "page", issueId: S.tab.slice(2), slotId: el.dataset.id, live: true }),
+  "pg-apply": async () => {
+    const issue = S.issues[S.modal.issueId], id = S.modal.slotId;
+    const n = Math.floor(+$("#pg-count").value);
+    if (!(n >= 1)) return toast("Indique un nombre de pages (1 ou plus).");
+    const { patch, targets } = L.applyNextPatch(issue, id, n, { withCard: !!$("#pg-count-card")?.checked });
+    if (!targets.length) return toast("Il n'y a plus de page après celle-ci.");
+    const src = issue.pages[id];
+    const busy = targets.filter((t) => t.type !== "empty" && (t.type !== src.type || t.rubId !== src.rubId));
+    if (busy.length && !confirm(`${busy.length} page(s) déjà attribuée(s) parmi les ${targets.length} suivantes seront remplacées (p. ${busy.map((t) => t.pos).join(", ")}). Continuer ?`)) return;
+    await run(S.store.updateDoc(`magIssues/${issue.id}`, patch));
+    toast(`Appliqué aux pages ${targets[0].pos} à ${targets.at(-1).pos}`);
+  },
   "pg-insert": () => { const issue = S.issues[S.modal.issueId], patch = L.insertPatch(issue, issue.pages[S.modal.slotId].pos); if (!patch) return toast(`Impossible : la dernière page (${issue.pages ? Object.keys(issue.pages).length : L.PAGES_TOTAL}) est occupée. Libère-la d'abord.`); run(S.store.updateDoc(`magIssues/${issue.id}`, patch)).then(() => { toast("Page insérée — les suivantes ont été décalées"); closeModal(); }); },
   "pg-remove": () => { const issue = S.issues[S.modal.issueId]; if (!confirm("Retirer cette page ? Les suivantes remontent d'un cran et une page vierge est ajoutée à la fin.")) return; run(S.store.updateDoc(`magIssues/${issue.id}`, L.removePatch(issue, S.modal.slotId))).then(closeModal); },
   "open-card": (el) => { if (S.modal?.kind === "page") closeModal(); openCardEditor(el.dataset.id); },
