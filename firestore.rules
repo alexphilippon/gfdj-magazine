@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    // ===================== Planning GFDJ (inchangé, repris du dépôt gfdj-planning) =====================
+    function isAdmin() {
+      return signedIn() && request.auth.token.email == 'alexandre.philippon@gmail.com';
+    }
+    function isMember() {
+      return isAdmin() || (signedIn() &&
+        request.auth.token.email.lower() in
+          get(/databases/$(database)/documents/config/access).data.allowedEmails);
+    }
+
+    match /config/{doc}     { allow read: if isMember(); allow write: if isAdmin(); }
+    match /races/{id}       { allow read: if isMember(); allow write: if isAdmin(); }
+    match /birthdays/{id}   { allow read: if isMember(); allow write: if isAdmin(); }
+
+    match /accessRequests/{em} {
+      allow create: if signedIn()
+        && request.auth.token.email.lower() == em
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['email', 'name', 'photo', 'status', 'createdAt']);
+      allow read: if isAdmin() || (signedIn() && request.auth.token.email.lower() == em);
+      allow update, delete: if isAdmin();
+    }
+
+    match /cards/{id} {
+      allow read, write: if isMember();
+      match /comments/{cid} {
+        allow read, create: if isMember();
+        allow update, delete: if isAdmin() ||
+          (isMember() && resource.data.authorEmail == request.auth.token.email);
+      }
+    }
+    match /entries/{id}     { allow read, write: if isMember(); }
+    match /piges/{id}       { allow read, write: if isMember(); }
+
+    // ===================== Magazine (nouveau) =====================
+    // Les listes d'adresses sont déduites des « Personnes » de l'onglet Admin (magConfig/access).
+    function magAdmin() {
+      return isAdmin() || (signedIn() &&
+        request.auth.token.email.lower() in
+          get(/databases/$(database)/documents/magConfig/access).data.adminEmails);
+    }
+    function magMember() {
+      return magAdmin() || (signedIn() &&
+        request.auth.token.email.lower() in
+          get(/databases/$(database)/documents/magConfig/access).data.allowedEmails);
+    }
+
+    // Structure, équipe, accès : lecture par l'équipe, écriture par les admins
+    match /magConfig/{doc}  { allow read: if magMember(); allow write: if magAdmin(); }
+    // Numéros et cards : tout le monde peut tout faire ; seuls les admins créent/suppriment un numéro
+    match /magIssues/{id} {
+      allow read, update: if magMember();
+      allow create, delete: if magAdmin();
+    }
+    match /magCards/{id}    { allow read, write: if magMember(); }
+  }
+}
