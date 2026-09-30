@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=6";
-import { firebaseStore, memoryStore } from "./store.js?v=6";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=6";
+import * as L from "./logic.js?v=8";
+import { firebaseStore, memoryStore } from "./store.js?v=8";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=8";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,7 +52,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=6")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=8")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -320,7 +320,7 @@ function calendar(tasks) {
   for (let i = 0; i < 42; i++) {
     const d = L.addDays(start, i), out = d.slice(0, 7) !== month.slice(0, 7), evs = by.get(d) || [];
     const cls = (t) => (t.done ? "done" : !t.milestone && t.date < S.d.today ? "late" : L.diffDays(S.d.today, t.date) <= S.d.imminent && !t.milestone ? "imminent" : "");
-    cells += `<div class="d ${out ? "out" : ""} ${d === S.d.today ? "today" : ""}"><div class="n">${+d.slice(8)}</div>${evs.slice(0, 4).map((t) => `<button class="ev ${cls(t)}" data-act="open-card" data-id="${t.cardId}" title="${esc(t.label + " — " + t.cardTitle + " (" + pn(t.assignee) + ")")}">${esc(ini(t.assignee))} · ${esc(t.label)}</button>`).join("")}${evs.length > 4 ? `<div class="muted small">+${evs.length - 4}</div>` : ""}</div>`;
+    cells += `<div class="d ${out ? "out" : ""} ${d === S.d.today ? "today" : ""}"><div class="n">${+d.slice(8)}</div>${evs.slice(0, 4).map((t) => { const col = colorOf(rubOf(t.rubId)?.color)?.hex || "#8494A8"; return `<button class="ev ${cls(t)}" style="--rc:${col}" data-act="open-card" data-id="${t.cardId}" title="${esc(t.cardTitle + "\n" + t.label + " · " + L.PHASE_NAMES[t.phase] + " · " + pn(t.assignee) + (rubOf(t.rubId) ? "\n" + rubOf(t.rubId).name : "") + " · N°" + (S.issues[t.issueId]?.number ?? "?"))}"><span class="t">${esc(t.cardTitle)}</span><span class="s">N°${S.issues[t.issueId]?.number ?? "?"} · ${L.PHASE_NAMES[t.phase]} ${esc(t.label)} · ${esc(ini(t.assignee))}</span></button>`; }).join("")}${evs.length > 4 ? `<div class="muted small">+${evs.length - 4}</div>` : ""}</div>`;
   }
   return `<div class="tools"><button class="btn small" data-act="month" data-d="-1">←</button><b style="text-transform:capitalize;min-width:150px;text-align:center">${first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</b><button class="btn small" data-act="month" data-d="1">→</button><button class="btn small" data-act="month" data-d="0">Aujourd'hui</button></div>
     <div class="cal">${["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].map((d) => `<div class="h">${d}</div>`).join("")}${cells}</div>`;
@@ -388,7 +388,7 @@ function celebrateBlock(p, card) {
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=6")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=8")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
