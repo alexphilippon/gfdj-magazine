@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=11";
-import { firebaseStore, memoryStore } from "./store.js?v=11";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=11";
+import * as L from "./logic.js?v=12";
+import { firebaseStore, memoryStore } from "./store.js?v=12";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=12";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -62,7 +62,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=11")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=12")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -160,6 +160,7 @@ function headerHtml() {
   const tab = (id, label, badge) => `<button class="${S.tab === id ? "on" : ""}" data-act="tab" data-tab="${id}">${label}${badge ? `<span class="nav-badge">${badge}</span>` : ""}</button>`;
   const m = me(), u = S.user, who = m?.name || u.name || u.email;
   const avatar = `<button class="avatar" data-act="signout" title="Se déconnecter (${esc(u.email)})${DEMO ? " — mode démo" : ""}">${u.photo ? `<img src="${esc(u.photo)}" alt="" referrerpolicy="no-referrer">` : esc((who || "?")[0].toUpperCase())}</button>`;
+  const nUrg = urgentMine(), pipeBtn = `<button class="pipe-btn ${S.tab === "pipe" ? "on" : ""}" data-act="tab" data-tab="pipe">PIPELINE${nUrg ? `<span class="nav-badge">${nUrg}</span>` : ""}</button>`;
   let sub = "";
   if (S.tab.startsWith("i:") && S.issues[S.tab.slice(2)]) {
     const stx = L.issueStats(S.issues[S.tab.slice(2)], S.cards), pct = Math.round(stx.pct * 100);
@@ -168,8 +169,8 @@ function headerHtml() {
     sub = `<div class="toolbar sub">${DEMO ? `<span class="pill warn">Mode démo · rien n'est enregistré</span>` : ""}<button class="btn blue push" data-act="new-card">Nouvelle idée</button></div>`;
   }
   return `<div class="hdr"><header class="top"><div class="brand"><img src="logo-blanc.png" alt="Groupama-FDJ UNITED"><b>MAGAZINE</b></div>
-    <nav>${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}${tab("desk", "DESK")}${tab("pipe", "PIPELINE", urgentMine())}${tab("plan", "PLANNING")}${isAdmin() ? tab("admin", "ADMIN", pendingReqs().length) : ""}</nav>
-    <div class="top-actions">${avatar}</div></header>${sub}</div>`;
+    <nav>${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}${tab("desk", "DESK")}${tab("plan", "PLANNING")}${isAdmin() ? tab("admin", "ADMIN", pendingReqs().length) : ""}</nav>
+    <div class="top-actions">${pipeBtn}${avatar}</div></header>${sub}</div>`;
 }
 function viewHtml() {
   if (S.tab.startsWith("i:")) return issueView(S.issues[S.tab.slice(2)]);
@@ -394,7 +395,7 @@ function pipeView() {
     <div class="tools">${who}${S.pipe.undo.length ? `<button class="btn small" data-act="pipe-undo">↩ Annuler le dernier</button>` : ""}<span class="pipe-count">${done ? `<b>${done}</b> décroché${done > 1 ? "s" : ""} · ` : ""}<b>${q.length}</b> restant${q.length > 1 ? "s" : ""}${late ? ` · <span class="r">${late} en retard</span>` : ""}${today ? ` · ${today} aujourd'hui` : ""}</span></div>`;
   const nodeHtml = nodes.length ? `<section class="nodes"><h3>Nœuds à défaire (${nodes.length})</h3>${nodes.map((x) => `<div class="node"><span>${esc(x.msg)} — <b>${esc(x.cardTitle)}</b>${x.assignee ? ` · ${esc(pn(x.assignee))}` : ""}</span><button class="btn small" data-act="open-card" data-id="${x.cardId}">Corriger les dates</button></div>`).join("")}</section>` : "";
   if (!q.length) {
-    return `${head}<section class="clear"><img src="celebration-still.jpg?v=11" alt=""><h2>Voie libre !</h2><p>${done ? `${done} wagon${done > 1 ? "s" : ""} décroché${done > 1 ? "s" : ""}. Plus rien dans la file${person ? " pour " + esc(pn(person)) : ""}.` : `Rien à faire${person ? " pour " + esc(pn(person)) : ""} pour le moment.`}${nodes.length ? " Reste à défaire les nœuds ci-dessous." : ""}</p>${done ? `<button class="btn" data-act="celebrate-play">Rejouer la célébration</button>` : ""}</section>${nodeHtml}`;
+    return `${head}<section class="clear"><img src="celebration-still.jpg?v=12" alt=""><h2>Voie libre !</h2><p>${done ? `${done} wagon${done > 1 ? "s" : ""} décroché${done > 1 ? "s" : ""}. Plus rien dans la file${person ? " pour " + esc(pn(person)) : ""}.` : `Rien à faire${person ? " pour " + esc(pn(person)) : ""} pour le moment.`}${nodes.length ? " Reste à défaire les nœuds ci-dessous." : ""}</p>${done ? `<button class="btn" data-act="celebrate-play">Rejouer la célébration</button>` : ""}</section>${nodeHtml}`;
   }
   return `${head}${trainStrip(q)}<div class="pipe-main">${wagonFull(q[0])}
     ${q.length > 1 ? `<aside class="next-up"><h3>Ensuite</h3>${q.slice(1, 7).map((t) => `<button class="nx u-${t.urgency}" data-act="pipe-front" data-k="${esc(tkey(t))}"><i></i><span><b>${esc(t.label)}</b><small>${esc(t.cardTitle)} · ${t.urgency === "late" ? `retard ${t.daysLate} j` : t.date ? L.fmtShort(t.date) : "sans date"}</small></span></button>`).join("")}${q.length > 7 ? `<div class="muted small">+ ${q.length - 7} autres</div>` : ""}</aside>` : ""}</div>${nodeHtml}`;
@@ -516,7 +517,7 @@ function celebrateBlock(p, card) {
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=11")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=12")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
