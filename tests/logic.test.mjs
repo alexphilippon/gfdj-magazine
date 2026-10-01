@@ -208,3 +208,20 @@ test("page complète / validée : la validation ne compte que si la card est tou
   assert.equal(L.issueStats(issue, { c1: c }).validated, 0);
   c.phases = { a: false, b: false, c: false }; assert.equal(L.isPageComplete(c), false);
 });
+
+test("pipeline : tri par urgence, filtre par personne, liens", () => {
+  const today = "2027-01-10";
+  const mk = (id, over) => { const c = L.emptyCard({ defaults: { redacteur: "mignot", relecteur: "morel", graphiste: "porcheron", brief: "dujardin" }, issueId: "n1", title: id }); c.id = id; c.phases = { a: true, b: false, c: false }; return Object.assign(c, over); };
+  const c1 = mk("c1"); c1.a.v1 = { ...c1.a.v1, date: "2027-01-12", url: "https://docs.google.com/document/d/ABC/edit?tab=t.0" }; c1.a.vdef.date = "2027-01-09"; c1.a.recolte.skip = true;
+  const c2 = mk("c2"); c2.a.v1.date = "2027-01-10"; c2.a.vdef.date = ""; c2.a.recolte.skip = true;
+  const q = L.pipelineQueue([c1, c2], { n1: { id: "n1", number: 1 } }, today, { person: "mignot" });
+  assert.deepEqual(q.map((t) => [t.cardId, t.key, t.urgency]), [["c2", "v1", "today"], ["c1", "v1", "soon"]]);
+  const all = L.pipelineQueue([c1, c2], { n1: {} }, today);
+  assert.deepEqual(all.map((t) => t.urgency), ["late", "today", "soon", "undated"]);
+  assert.equal(all[0].waiting, "La V1 n'est pas encore livrée");
+  assert.equal(all[0].daysLate, 1);
+  assert.equal(L.embedUrl("https://docs.google.com/document/d/ABC/edit?tab=t.0"), "https://docs.google.com/document/d/ABC/preview");
+  assert.equal(L.embedUrl("https://drive.google.com/file/d/XYZ/view"), "https://drive.google.com/file/d/XYZ/preview");
+  assert.equal(L.embedUrl("https://example.org/x"), "");
+  assert.equal(q[1].link, "https://docs.google.com/document/d/ABC/edit?tab=t.0");
+});

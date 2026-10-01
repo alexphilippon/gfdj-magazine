@@ -331,3 +331,44 @@ export function textOn(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#1F294C" : "#FFFFFF";
 }
 export const slug = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/* ---------- Pipeline : la file de tâches à vider ---------- */
+/** Lien Drive utile pour accomplir une tâche (le texte sert à la V1 et à la relecture). */
+export function taskLink(card, t) {
+  if (t.phase === "a") return card.a.v1.url || "";
+  if (t.key === "delivery") return card.b.delivery.url || "";
+  if (t.phase === "c") return (t.key === "vdef" ? card.c.vdef.url : card.c.v1.url) || "";
+  return "";
+}
+/** Adresse intégrable en fenêtre (Google Docs/Sheets/Slides/Drive → /preview), sinon "". */
+export function embedUrl(u) {
+  if (!u) return "";
+  try {
+    const x = new URL(u);
+    if (x.hostname === "docs.google.com") { const m = x.pathname.match(/^\/(document|spreadsheets|presentation)\/d\/([^/]+)/); if (m) return `https://docs.google.com/${m[1]}/d/${m[2]}/preview`; }
+    if (x.hostname === "drive.google.com") { const m = x.pathname.match(/^\/file\/d\/([^/]+)/) || (x.searchParams.get("id") ? [0, x.searchParams.get("id")] : null); if (m) return `https://drive.google.com/file/d/${m[1]}/preview`; }
+  } catch { /* lien invalide */ }
+  return "";
+}
+/** Urgence d'une échéance : late | today | soon | later | undated. */
+export function urgencyOf(date, today, imminent = IMMINENT_DEFAULT) {
+  if (!date) return "undated";
+  if (date < today) return "late";
+  if (date === today) return "today";
+  return diffDays(today, date) <= imminent ? "soon" : "later";
+}
+/** Les wagons : tâches ouvertes (de la personne, ou de toute l'équipe si person vaut ""), de la plus urgente à la moins urgente. */
+export function pipelineQueue(cards, issues, today, { person = "", imminent = IMMINENT_DEFAULT } = {}) {
+  const out = [];
+  for (const c of cards) {
+    if (!c.issueId || !issues[c.issueId]) continue;
+    for (const t of cardTasks(c)) {
+      if (!t.closable || t.done || (person && t.assignee !== person)) continue;
+      const urgency = urgencyOf(t.date, today, imminent);
+      const waiting = t.phase === "a" && t.key === "vdef" && !c.a.v1.done ? "La V1 n'est pas encore livrée" : "";
+      out.push({ ...t, urgency, daysLate: urgency === "late" ? diffDays(t.date, today) : 0, link: taskLink(c, t), waiting });
+    }
+  }
+  const rank = { late: 0, today: 1, soon: 2, later: 3, undated: 4 };
+  return out.sort((a, b) => rank[a.urgency] - rank[b.urgency] || (a.date || "").localeCompare(b.date || "") || (a.time || "").localeCompare(b.time || "") || a.cardTitle.localeCompare(b.cardTitle));
+}

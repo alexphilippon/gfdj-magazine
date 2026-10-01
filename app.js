@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=10";
-import { firebaseStore, memoryStore } from "./store.js?v=10";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=10";
+import * as L from "./logic.js?v=11";
+import { firebaseStore, memoryStore } from "./store.js?v=11";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=11";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -20,7 +20,7 @@ function signinProblem(e) {
 /* ---------- État ---------- */
 const S = {
   store: null, user: null, config: null, access: null, issues: {}, cards: {}, tab: "", error: "", seeding: false, subs: [],
-  modal: null, drag: null, d: null, req: null, reqs: {}, reqWatch: null, retried: false,
+  modal: null, drag: null, pipe: { person: null, front: "", skipped: [], done: 0, undo: [], busy: false }, d: null, req: null, reqs: {}, reqWatch: null, retried: false,
   f: {
     chapter: "", lateOnly: false,
     desk: { q: "", issue: "", rub: "", person: "", state: "" },
@@ -62,7 +62,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=10")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=11")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -168,12 +168,13 @@ function headerHtml() {
     sub = `<div class="toolbar sub">${DEMO ? `<span class="pill warn">Mode démo · rien n'est enregistré</span>` : ""}<button class="btn blue push" data-act="new-card">Nouvelle idée</button></div>`;
   }
   return `<div class="hdr"><header class="top"><div class="brand"><img src="logo-blanc.png" alt="Groupama-FDJ UNITED"><b>MAGAZINE</b></div>
-    <nav>${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}${tab("desk", "DESK")}${tab("plan", "PLANNING")}${isAdmin() ? tab("admin", "ADMIN", pendingReqs().length) : ""}</nav>
+    <nav>${issueList().map((i) => tab("i:" + i.id, `N°${i.number}`, bad(i.id))).join("")}${tab("desk", "DESK")}${tab("pipe", "PIPELINE", urgentMine())}${tab("plan", "PLANNING")}${isAdmin() ? tab("admin", "ADMIN", pendingReqs().length) : ""}</nav>
     <div class="top-actions">${avatar}</div></header>${sub}</div>`;
 }
 function viewHtml() {
   if (S.tab.startsWith("i:")) return issueView(S.issues[S.tab.slice(2)]);
   if (S.tab === "desk") return deskView();
+  if (S.tab === "pipe") return pipeView();
   if (S.tab === "plan") return planView();
   if (S.tab === "admin") return adminView();
   return "";
@@ -321,6 +322,90 @@ function deskCards() {
   return l.length ? l.map(cardFace).join("") : `<div class="muted">Aucune card ne correspond.</div>`;
 }
 
+
+/* ---------- Pipeline : le train de tâches à vider ---------- */
+const tkey = (t) => `${t.cardId}|${t.phase}|${t.key}|${t.sub || ""}`;
+const pipePerson = () => (S.pipe.person === null ? me()?.id || "" : S.pipe.person);
+function pipeQueue() {
+  const q = L.pipelineQueue(S.d.arr, S.issues, S.d.today, { person: pipePerson(), imminent: S.d.imminent });
+  const sk = S.pipe.skipped;
+  const list = [...q.filter((t) => !sk.includes(tkey(t))), ...sk.map((k) => q.find((t) => tkey(t) === k)).filter(Boolean)];
+  const fi = list.findIndex((t) => tkey(t) === S.pipe.front);
+  if (fi > 0) list.unshift(list.splice(fi, 1)[0]);
+  return list;
+}
+/** Pastille de l'onglet : mes tâches en retard ou du jour. */
+function urgentMine() {
+  const m = me(); if (!m) return 0;
+  return L.pipelineQueue(S.d.arr, S.issues, S.d.today, { person: m.id }).filter((t) => t.urgency === "late" || t.urgency === "today").length;
+}
+const URG = { late: "En retard", today: "Aujourd'hui", soon: "Imminent", later: "À venir", undated: "Sans date" };
+function whenText(t) {
+  if (t.urgency === "late") return `En retard de ${t.daysLate} j · prévu le ${L.fmtDay(t.date)}`;
+  if (t.urgency === "today") return `À faire aujourd'hui${t.time ? " à " + t.time : ""}`;
+  if (t.urgency === "undated") return "Aucune date : à planifier";
+  return `Dans ${L.diffDays(S.d.today, t.date)} j · ${L.fmtDay(t.date)}`;
+}
+function wagonDetail(t, c) {
+  const rows = [];
+  if (t.key === "recolte" && t.detail) {
+    const d = t.detail;
+    if (d.who) rows.push(["Interlocuteur", esc(d.who)]);
+    if (d.phone) rows.push(["Téléphone", `<a href="tel:${esc(d.phone.replace(/\s/g, ""))}">${esc(d.phone)}</a>`]);
+    rows.push(["Où", d.visio ? `Visio` : d.field ? "Sur le terrain" : "Au téléphone"]);
+  }
+  if (t.key === "shoot") {
+    const s = c.b.shoot; if (s.place) rows.push(["Lieu", esc(s.place)]); if (s.contact) rows.push(["Contact sur place", esc(s.contact)]);
+  }
+  if (t.key === "brief" && c.b.brief.text) rows.push(["Brief", esc(c.b.brief.text.length > 260 ? c.b.brief.text.slice(0, 260) + "…" : c.b.brief.text)]);
+  if (t.key === "vdef" && t.phase === "a") rows.push(["À faire", "Relire le texte, corriger puis valider la version définitive"]);
+  if (t.key === "v1" && t.phase === "c") rows.push(["Concepteur", esc(pn(c.c.designer))]);
+  return rows.length ? `<dl class="wg-detail">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` : "";
+}
+function wagonFull(t) {
+  const c = S.cards[t.cardId], issue = S.issues[t.issueId];
+  const pages = issue ? L.fmtPages(L.cardPagePositions(issue, t.cardId, S.cards)) : "";
+  const visio = t.key === "recolte" && t.detail?.visio;
+  const embeddable = !!L.embedUrl(t.link);
+  return `<article class="wagon u-${t.urgency}" id="wagon" data-key="${esc(tkey(t))}">
+    <div class="wg-top"><span class="pill u-pill">${URG[t.urgency]}</span><span class="pill grey">N°${issue?.number ?? "?"}</span><span class="pill">${L.PHASE_NAMES[t.phase]}</span>${rubOf(t.rubId) ? `<span class="pill grey">${esc(rubOf(t.rubId).name)}</span>` : ""}${pages ? `<span class="pill grey">${pages}</span>` : ""}</div>
+    <h2 class="wg-title">${esc(t.label)}</h2>
+    <div class="wg-card"><a data-act="open-card" data-id="${t.cardId}">${esc(t.cardTitle)}</a></div>
+    <div class="wg-when">${whenText(t)}${pipePerson() ? "" : ` · <b>${esc(pn(t.assignee))}</b>`}</div>
+    ${t.waiting ? `<div class="wg-note">${esc(t.waiting)} : tu peux quand même passer.</div>` : ""}
+    ${wagonDetail(t, c)}
+    <div class="wg-actions">
+      ${t.link ? `<button class="btn big" data-act="pipe-doc" data-k="${esc(tkey(t))}">${embeddable ? "Ouvrir le document" : "Ouvrir le lien ↗"}</button>` : ""}
+      ${visio ? `<a class="btn big" href="${esc(visio)}" target="_blank" rel="noopener">Rejoindre la visio ↗</a>` : ""}
+      <button class="btn big go" data-act="pipe-done" data-k="${esc(tkey(t))}">C'est fait ✓</button>
+      <button class="btn ghost" data-act="pipe-skip">Plus tard ↷</button>
+    </div></article>`;
+}
+function trainStrip(q) {
+  const MAX = 14, shown = q.slice(0, MAX);
+  return `<div class="train" aria-hidden="true"><span class="loco"></span>${shown.map((t, i) => `<span class="car u-${t.urgency}${i === 0 ? " cur" : ""}"></span>`).join("")}${q.length > MAX ? `<span class="more">+${q.length - MAX}</span>` : ""}</div>`;
+}
+function pipeView() {
+  const q = pipeQueue(), person = pipePerson(), m = me(), done = S.pipe.done;
+  const nodes = S.d.alerts.conflicts.filter((x) => !person || x.assignee === person);
+  const late = q.filter((t) => t.urgency === "late").length, today = q.filter((t) => t.urgency === "today").length;
+  const who = `<select data-chg="pipe-person"><option value="" ${person === "" ? "selected" : ""}>Toute l'équipe</option>${people().map((p) => `<option value="${esc(p.id)}" ${p.id === person ? "selected" : ""}>${m && p.id === m.id ? "Moi · " : ""}${esc(p.name)}</option>`).join("")}</select>`;
+  const head = `<div class="head" style="grid-template-columns:1fr"><div><h2>PIPELINE</h2><div class="muted">Les tâches à décrocher, de la plus urgente à la moins urgente. Une à la fois.</div></div></div>
+    <div class="tools">${who}${S.pipe.undo.length ? `<button class="btn small" data-act="pipe-undo">↩ Annuler le dernier</button>` : ""}<span class="pipe-count">${done ? `<b>${done}</b> décroché${done > 1 ? "s" : ""} · ` : ""}<b>${q.length}</b> restant${q.length > 1 ? "s" : ""}${late ? ` · <span class="r">${late} en retard</span>` : ""}${today ? ` · ${today} aujourd'hui` : ""}</span></div>`;
+  const nodeHtml = nodes.length ? `<section class="nodes"><h3>Nœuds à défaire (${nodes.length})</h3>${nodes.map((x) => `<div class="node"><span>${esc(x.msg)} — <b>${esc(x.cardTitle)}</b>${x.assignee ? ` · ${esc(pn(x.assignee))}` : ""}</span><button class="btn small" data-act="open-card" data-id="${x.cardId}">Corriger les dates</button></div>`).join("")}</section>` : "";
+  if (!q.length) {
+    return `${head}<section class="clear"><img src="celebration-still.jpg?v=11" alt=""><h2>Voie libre !</h2><p>${done ? `${done} wagon${done > 1 ? "s" : ""} décroché${done > 1 ? "s" : ""}. Plus rien dans la file${person ? " pour " + esc(pn(person)) : ""}.` : `Rien à faire${person ? " pour " + esc(pn(person)) : ""} pour le moment.`}${nodes.length ? " Reste à défaire les nœuds ci-dessous." : ""}</p>${done ? `<button class="btn" data-act="celebrate-play">Rejouer la célébration</button>` : ""}</section>${nodeHtml}`;
+  }
+  return `${head}${trainStrip(q)}<div class="pipe-main">${wagonFull(q[0])}
+    ${q.length > 1 ? `<aside class="next-up"><h3>Ensuite</h3>${q.slice(1, 7).map((t) => `<button class="nx u-${t.urgency}" data-act="pipe-front" data-k="${esc(tkey(t))}"><i></i><span><b>${esc(t.label)}</b><small>${esc(t.cardTitle)} · ${t.urgency === "late" ? `retard ${t.daysLate} j` : t.date ? L.fmtShort(t.date) : "sans date"}</small></span></button>`).join("")}${q.length > 7 ? `<div class="muted small">+ ${q.length - 7} autres</div>` : ""}</aside>` : ""}</div>${nodeHtml}`;
+}
+function docModalHtml() {
+  const m = S.modal, t = pipeQueue().find((x) => tkey(x) === m.k);
+  const url = m.link, emb = L.embedUrl(url);
+  return `<div class="modal docmodal"><div class="doc-bar"><b>${esc(m.label)}</b><span class="muted small">${esc(m.title)}</span><span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap"><a class="btn small" href="${esc(url)}" target="_blank" rel="noopener">S'ouvre mal ? Ouvrir à part ↗</a>${t ? `<button class="btn small go" data-act="pipe-done" data-k="${esc(m.k)}">C'est fait ✓ → suivant</button>` : ""}<button class="btn small ghost" data-act="close">Fermer</button></span></div>
+    <iframe src="${esc(emb)}" title="${esc(m.label)}" referrerpolicy="no-referrer-when-downgrade" allow="clipboard-write"></iframe></div>`;
+}
+
 /* ---------- Planning de prod ---------- */
 function planTasks() {
   const f = S.f.plan;
@@ -379,6 +464,7 @@ function renderModal(keepScroll) {
   else if (m.kind === "page") html = pageModalHtml();
   else if (m.kind === "issue") html = issueModalHtml();
   else if (m.kind === "newissue") html = newIssueModalHtml();
+  else if (m.kind === "doc") html = docModalHtml();
   if (!html) return closeModal();
   $("#modal-root").innerHTML = `<div class="veil" data-veil>${html}</div>`;
   if (keepScroll && $("#modal-root .veil")) $("#modal-root .veil").scrollTop = sc;
@@ -430,7 +516,7 @@ function celebrateBlock(p, card) {
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=10")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=11")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
@@ -651,6 +737,7 @@ async function onChange(e) {
   if (k === "f-chapter") { S.f.chapter = v; return render(); }
   if (k === "f-late") { S.f.lateOnly = v; return render(); }
   if (k.startsWith("desk-")) { S.f.desk[k.slice(5)] = v; return render(); }
+  if (k === "pipe-person") { S.pipe.person = v; S.pipe.skipped = []; return render(); }
   if (k.startsWith("plan-")) { S.f.plan[k.slice(5)] = v; return render(); }
   if (S.modal?.kind === "page") {
     const issue = S.issues[S.modal.issueId], sid = S.modal.slotId, p = issue.pages[sid];
@@ -691,6 +778,33 @@ const ACT = {
     try { await saveConfig(cfg, { access: true }); await S.store.updateDoc("magAccessRequests/" + em, { status: "approved" }); toast(`Accès accordé à ${em}`); } catch (e) { fail(e); }
   },
   "req-no": (el) => run(S.store.updateDoc("magAccessRequests/" + el.dataset.email, { status: "rejected" })).then(() => toast("Demande refusée")),
+  "pipe-doc": (el) => {
+    const t = pipeQueue().find((x) => tkey(x) === el.dataset.k); if (!t) return;
+    if (!L.embedUrl(t.link)) return void window.open(t.link, "_blank", "noopener");
+    openModal({ kind: "doc", k: el.dataset.k, cardId: t.cardId, link: t.link, label: t.label, title: t.cardTitle });
+  },
+  "pipe-skip": () => { const q = pipeQueue(); if (q.length < 2) return toast("C'est la seule tâche de la file."); S.pipe.skipped = [...S.pipe.skipped.filter((k) => k !== tkey(q[0])), tkey(q[0])]; S.pipe.front = ""; render(); },
+  "pipe-front": (el) => { S.pipe.front = el.dataset.k; S.pipe.skipped = S.pipe.skipped.filter((k) => k !== el.dataset.k); render(); },
+  "pipe-done": async (el) => {
+    if (S.pipe.busy) return;
+    const k = el.dataset.k, t = pipeQueue().find((x) => tkey(x) === k), c = t && S.cards[t.cardId]; if (!c) return;
+    S.pipe.busy = true;
+    if (S.modal?.kind === "doc") closeModal();
+    $("#wagon")?.classList.add("leaving");
+    await new Promise((r) => setTimeout(r, 380));
+    const left = pipeQueue().length - 1;
+    S.pipe.undo.push({ cardId: c.id, phase: t.phase, key: t.key, sub: t.sub || "", label: t.label });
+    S.pipe.done++; S.pipe.front = ""; S.pipe.skipped = S.pipe.skipped.filter((x) => x !== k);
+    await run(S.store.updateDoc(`magCards/${c.id}`, L.taskDonePatch(c, t, true)));
+    S.pipe.busy = false;
+    if (left <= 0) { playCelebration(); } else if (S.pipe.done % 5 === 0) toast(`${S.pipe.done} wagons décrochés, plus que ${left}`);
+    render();
+  },
+  "pipe-undo": async () => {
+    const u = S.pipe.undo.pop(); if (!u) return; const c = S.cards[u.cardId], t = c && findTask(c, u); if (!t) return;
+    S.pipe.done = Math.max(0, S.pipe.done - 1);
+    await run(S.store.updateDoc(`magCards/${c.id}`, L.taskDonePatch(c, t, false))); toast(`« ${u.label} » est revenu dans la file`); render();
+  },
   tab: (el) => { S.tab = el.dataset.tab; render(); window.scrollTo(0, 0); },
   close: () => closeModal(),
   "close-card": () => { if (confirm("Fermer sans enregistrer ?")) closeModal(); },
