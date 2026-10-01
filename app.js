@@ -1,11 +1,21 @@
-import * as L from "./logic.js?v=9";
-import { firebaseStore, memoryStore } from "./store.js?v=9";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=9";
+import * as L from "./logic.js?v=10";
+import { firebaseStore, memoryStore } from "./store.js?v=10";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=10";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------- Navigateur intégré à une application (WhatsApp, Instagram…) : la connexion Google y échoue ---------- */
+const UA = navigator.userAgent || "";
+const IN_APP = /FBAN|FBAV|Instagram|WhatsApp|Line\/|MicroMessenger|Snapchat|LinkedInApp|Twitter|TikTok|GSA\/|; wv\)/i.test(UA) || (/iPhone|iPad|iPod/.test(UA) && !/Safari|CriOS|FxiOS|EdgiOS|OPiOS/.test(UA));
+function signinProblem(e) {
+  const c = e?.code || "";
+  if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") return;
+  const embedded = ["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported"].includes(c) || IN_APP;
+  toast(embedded ? "La connexion Google ne marche pas dans ce navigateur intégré : ouvre le lien dans Safari ou Chrome." : "Connexion impossible : " + (e?.message || c || "erreur inconnue"));
+}
 
 /* ---------- État ---------- */
 const S = {
@@ -52,7 +62,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=9")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=10")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -117,7 +127,7 @@ const run = (p) => Promise.resolve(p).catch(fail);
 function render() {
   const root = $("#app");
   if (!S.user) {
-    root.innerHTML = `<div class="gate"><div class="gate-box"><h1>MAGAZINE · SUIVI DE PROD</h1><p>Groupama-FDJ UNITED — chemin de fer, desk et planning de production du magazine trimestriel.</p><button class="btn" data-act="signin">Se connecter avec Google</button><p class="small" style="margin:12px 0 0">Ton adresse n'est pas encore autorisée ? Connecte-toi quand même avec Google : tu pourras demander l'accès juste après.</p></div></div>`;
+    root.innerHTML = `<div class="gate"><div class="gate-box"><h1>MAGAZINE · SUIVI DE PROD</h1><p>Groupama-FDJ UNITED — chemin de fer, desk et planning de production du magazine trimestriel.</p>${IN_APP ? `<div class="box-warn" style="margin:0 0 14px;text-align:left;color:var(--ink)"><b>Tu ouvres ce lien depuis une application</b> (WhatsApp, Instagram, Gmail…). La connexion Google ne fonctionne pas dans son navigateur intégré.<br>Ouvre-le dans <b>Safari</b> ou <b>Chrome</b> : touche l'icône de partage ou « … » puis « Ouvrir dans le navigateur », ou copie le lien.<br><button class="btn small" style="margin-top:8px" data-act="copy-link">Copier le lien</button></div>` : ""}<button class="btn" data-act="signin">Se connecter avec Google</button><p class="small" style="margin:12px 0 0">Ton adresse n'est pas encore autorisée ? Connecte-toi quand même avec Google : tu pourras demander l'accès juste après.</p></div></div>`;
     return;
   }
   if (S.error) {
@@ -420,7 +430,7 @@ function celebrateBlock(p, card) {
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=9")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=10")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
@@ -663,7 +673,8 @@ function onDraftInput(e) {
 }
 
 const ACT = {
-  signin: () => S.store.signIn().catch(fail),
+  signin: () => S.store.signIn().catch(signinProblem),
+  "copy-link": () => { const url = location.origin + location.pathname; (navigator.clipboard?.writeText(url) || Promise.reject()).then(() => toast("Lien copié : colle-le dans Safari ou Chrome"), () => toast(url)); },
   signout: () => S.store.signOut(),
   "req-send": async () => {
     const u = S.user;
