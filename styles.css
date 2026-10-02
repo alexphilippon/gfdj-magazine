@@ -199,3 +199,4 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .pipe-btn:hover { background: #F21F30; } .pipe-btn.on { background: #fff; color: var(--red); border-color: #fff; }
 .pipe-btn .nav-badge { background: #fff; color: var(--red); } .pipe-btn.on .nav-badge { background: var(--red); color: #fff; }
 @media (max-width: 760px) { .brand b { display: none; } .pipe-btn { font-size: 15px; padding: 3px 8px; } .top-actions { gap: 6px; } }
+.pg.over-m { outline: 2px dashed var(--ink); } .pg.over-l { box-shadow: inset 7px 0 0 var(--red); } .pg.over-r { box-shadow: inset -7px 0 0 var(--red); }

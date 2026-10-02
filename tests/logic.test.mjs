@@ -225,3 +225,22 @@ test("pipeline : tri par urgence, filtre par personne, liens", () => {
   assert.equal(L.embedUrl("https://example.org/x"), "");
   assert.equal(q[1].link, "https://docs.google.com/document/d/ABC/edit?tab=t.0");
 });
+
+test("intercaler une page décale les autres sans toucher au total", () => {
+  const issue = { pages: L.initialPages() };
+  const id = (pos) => Object.entries(issue.pages).find(([, p]) => p.pos === pos)[0];
+  const apply = (patch) => { const next = structuredClone(issue); for (const [k, v] of Object.entries(patch)) { const [, sid, f] = k.split("."); next.pages[sid][f] = v; } return next; };
+  const order = (is) => Object.values(is.pages).sort((a, b) => a.pos - b.pos).map((p) => p.pos);
+  const ids = [3, 4, 5, 6].map(id);
+  // 6 avant 3 : 3,4,5 reculent
+  let r = apply(L.intercalatePatch(issue, ids[3], ids[0], false));
+  assert.deepEqual(order(r), order(issue));
+  assert.equal(r.pages[ids[3]].pos, 3); assert.equal(r.pages[ids[0]].pos, 4); assert.equal(r.pages[ids[2]].pos, 6);
+  // 3 après 5 : 4,5 avancent, 3 devient 5
+  r = apply(L.intercalatePatch(issue, ids[0], ids[2], true));
+  assert.equal(r.pages[ids[0]].pos, 5); assert.equal(r.pages[ids[1]].pos, 3); assert.equal(r.pages[ids[2]].pos, 4); assert.equal(r.pages[ids[3]].pos, 6);
+  // 3 avant 4 / 4 après 3 : rien ne bouge
+  assert.deepEqual(L.intercalatePatch(issue, ids[0], ids[1], false), {});
+  assert.deepEqual(L.intercalatePatch(issue, ids[1], ids[0], true), {});
+  assert.deepEqual(order(r), order(issue));
+});

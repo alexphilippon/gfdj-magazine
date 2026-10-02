@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=12";
-import { firebaseStore, memoryStore } from "./store.js?v=12";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=12";
+import * as L from "./logic.js?v=13";
+import { firebaseStore, memoryStore } from "./store.js?v=13";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=13";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -62,7 +62,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=12")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=13")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -236,7 +236,7 @@ function issueView(issue) {
     <label class="c"><input type="checkbox" data-chg="f-late" ${S.f.lateOnly ? "checked" : ""}> Seulement les pages en retard</label>
     <span class="legend">${S.config.colors.map((c) => `<span><i style="background:${c.hex}"></i>${esc(c.name)}</span>`).join("")}</span></div>
   <div class="spreads">${sp.map((pair, idx) => `<div class="spread ${idx === 0 ? "first" : ""}">${pair.map((p) => tile(p, lateCards)).join("")}</div>`).join("")}</div>
-  <p class="muted small">Cliquer sur une page pour l'attribuer ou clôturer une phase · glisser-déposer une page sur une autre pour les échanger.</p>`;
+  <p class="muted small">Cliquer sur une page pour l'attribuer ou clôturer une phase · glisser-déposer une page : au centre d'une autre pour les échanger, sur son bord gauche/droit (trait rouge) pour l'intercaler et décaler les suivantes.</p>`;
 }
 
 function tile(p, lateCards) {
@@ -395,7 +395,7 @@ function pipeView() {
     <div class="tools">${who}${S.pipe.undo.length ? `<button class="btn small" data-act="pipe-undo">↩ Annuler le dernier</button>` : ""}<span class="pipe-count">${done ? `<b>${done}</b> décroché${done > 1 ? "s" : ""} · ` : ""}<b>${q.length}</b> restant${q.length > 1 ? "s" : ""}${late ? ` · <span class="r">${late} en retard</span>` : ""}${today ? ` · ${today} aujourd'hui` : ""}</span></div>`;
   const nodeHtml = nodes.length ? `<section class="nodes"><h3>Nœuds à défaire (${nodes.length})</h3>${nodes.map((x) => `<div class="node"><span>${esc(x.msg)} — <b>${esc(x.cardTitle)}</b>${x.assignee ? ` · ${esc(pn(x.assignee))}` : ""}</span><button class="btn small" data-act="open-card" data-id="${x.cardId}">Corriger les dates</button></div>`).join("")}</section>` : "";
   if (!q.length) {
-    return `${head}<section class="clear"><img src="celebration-still.jpg?v=12" alt=""><h2>Voie libre !</h2><p>${done ? `${done} wagon${done > 1 ? "s" : ""} décroché${done > 1 ? "s" : ""}. Plus rien dans la file${person ? " pour " + esc(pn(person)) : ""}.` : `Rien à faire${person ? " pour " + esc(pn(person)) : ""} pour le moment.`}${nodes.length ? " Reste à défaire les nœuds ci-dessous." : ""}</p>${done ? `<button class="btn" data-act="celebrate-play">Rejouer la célébration</button>` : ""}</section>${nodeHtml}`;
+    return `${head}<section class="clear"><img src="celebration-still.jpg?v=13" alt=""><h2>Voie libre !</h2><p>${done ? `${done} wagon${done > 1 ? "s" : ""} décroché${done > 1 ? "s" : ""}. Plus rien dans la file${person ? " pour " + esc(pn(person)) : ""}.` : `Rien à faire${person ? " pour " + esc(pn(person)) : ""} pour le moment.`}${nodes.length ? " Reste à défaire les nœuds ci-dessous." : ""}</p>${done ? `<button class="btn" data-act="celebrate-play">Rejouer la célébration</button>` : ""}</section>${nodeHtml}`;
   }
   return `${head}${trainStrip(q)}<div class="pipe-main">${wagonFull(q[0])}
     ${q.length > 1 ? `<aside class="next-up"><h3>Ensuite</h3>${q.slice(1, 7).map((t) => `<button class="nx u-${t.urgency}" data-act="pipe-front" data-k="${esc(tkey(t))}"><i></i><span><b>${esc(t.label)}</b><small>${esc(t.cardTitle)} · ${t.urgency === "late" ? `retard ${t.daysLate} j` : t.date ? L.fmtShort(t.date) : "sans date"}</small></span></button>`).join("")}${q.length > 7 ? `<div class="muted small">+ ${q.length - 7} autres</div>` : ""}</aside>` : ""}</div>${nodeHtml}`;
@@ -517,7 +517,7 @@ function celebrateBlock(p, card) {
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=12")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=13")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
@@ -877,13 +877,20 @@ document.addEventListener("input", (e) => {
 
 /* Glisser-déposer : échanger deux pages du chemin de fer */
 document.addEventListener("dragstart", (e) => { const el = e.target.closest?.("[data-drop]"); if (el) { S.drag = el.dataset.drop; e.dataTransfer.setData("text/plain", S.drag); e.dataTransfer.effectAllowed = "move"; } });
-document.addEventListener("dragover", (e) => { const el = e.target.closest?.("[data-drop]"); if (el && S.drag) { e.preventDefault(); $$(".pg.over").forEach((x) => x.classList.remove("over")); el.classList.add("over"); } });
-document.addEventListener("dragend", () => { S.drag = null; $$(".pg.over").forEach((x) => x.classList.remove("over")); });
+const dropZone = (e, el) => { const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width; return x < 0.3 ? "l" : x > 0.7 ? "r" : "m"; };
+const clearOver = () => $$(".pg.over-l,.pg.over-r,.pg.over-m").forEach((x) => x.classList.remove("over-l", "over-r", "over-m"));
+document.addEventListener("dragover", (e) => { const el = e.target.closest?.("[data-drop]"); if (el && S.drag) { e.preventDefault(); clearOver(); el.classList.add("over-" + dropZone(e, el)); } });
+document.addEventListener("dragend", () => { S.drag = null; clearOver(); });
 document.addEventListener("drop", (e) => {
   const el = e.target.closest?.("[data-drop]"); if (!el || !S.drag) return;
   e.preventDefault();
-  const a = S.drag, b = el.dataset.drop; S.drag = null;
+  const a = S.drag, b = el.dataset.drop, z = dropZone(e, el); S.drag = null; clearOver();
   const issue = S.issues[S.tab.slice(2)];
-  if (a !== b && issue?.pages[a] && issue.pages[b]) run(S.store.updateDoc(`magIssues/${issue.id}`, L.swapPatch(issue, a, b))).then(() => toast(`Pages ${issue.pages[a].pos} et ${issue.pages[b].pos} échangées`));
+  if (a === b || !issue?.pages[a] || !issue.pages[b]) return;
+  const pa = issue.pages[a].pos, pb = issue.pages[b].pos;
+  if (z === "m") return void run(S.store.updateDoc(`magIssues/${issue.id}`, L.swapPatch(issue, a, b))).then(() => toast(`Pages ${pa} et ${pb} échangées`));
+  const patch = L.intercalatePatch(issue, a, b, z === "r");
+  if (!Object.keys(patch).length) return;
+  run(S.store.updateDoc(`magIssues/${issue.id}`, patch)).then(() => toast(`Page ${pa} intercalée en page ${patch[`pages.${a}.pos`]} — les autres ont été décalées`));
 });
 window.__S = S; window.__render = render; // pour les tests

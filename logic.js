@@ -233,6 +233,24 @@ export function swapPatch(issue, idA, idB) {
   const a = issue.pages[idA], b = issue.pages[idB];
   return { [`pages.${idA}.pos`]: b.pos, [`pages.${idB}.pos`]: a.pos };
 }
+/** Déplace la page `id` à la position finale `dest` ; les pages entre les deux se décalent d'un cran (total inchangé). */
+export function movePatch(issue, id, dest) {
+  const src = issue.pages[id].pos, patch = {};
+  if (dest === src) return patch;
+  for (const p of pagesSorted(issue)) {
+    if (p.id === id) continue;
+    if (src < dest && p.pos > src && p.pos <= dest) patch[`pages.${p.id}.pos`] = p.pos - 1;
+    if (src > dest && p.pos >= dest && p.pos < src) patch[`pages.${p.id}.pos`] = p.pos + 1;
+  }
+  patch[`pages.${id}.pos`] = dest;
+  return patch;
+}
+/** Intercale la page `id` juste avant (`after` faux) ou juste après la page `targetId`. */
+export function intercalatePatch(issue, id, targetId, after = false) {
+  const s = issue.pages[id].pos, t = issue.pages[targetId].pos;
+  const dest = after ? (s < t ? t : t + 1) : (s < t ? t - 1 : t);
+  return movePatch(issue, id, dest);
+}
 /** Insère une page vierge à la position `pos` : possible seulement si la dernière page est libre (le total reste fixe). */
 export function insertPatch(issue, pos) {
   const s = pagesSorted(issue);

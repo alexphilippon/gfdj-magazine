@@ -1,4 +1,4 @@
-import { initialPages, slug } from "./logic.js?v=12";
+import { initialPages, slug } from "./logic.js?v=13";
 
 /* Couleurs de rubriques. Les codes viennent de la palette du template « Équipe 2027 » :
    rouge #E10819 et bleu #006AB1 sont dans la charte ; le bleu clair et le gris clair en sont des teintes claires.
