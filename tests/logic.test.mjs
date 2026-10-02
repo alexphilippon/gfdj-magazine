@@ -244,3 +244,10 @@ test("intercaler une page décale les autres sans toucher au total", () => {
   assert.deepEqual(L.intercalatePatch(issue, ids[1], ids[0], true), {});
   assert.deepEqual(order(r), order(issue));
 });
+
+test("chapitres : les pages d'ajustement entre deux pages du même chapitre en font partie", () => {
+  const P = (id, type, ch) => ({ id, type, ch });
+  const pages = [P("a", "empty"), P("b", "rub", "X"), P("c", "publi"), P("d", "rub", "X"), P("e", "inter"), P("f", "rub", "Y"), P("g", "inter"), P("h", "rub", "X"), P("i", "pub")];
+  const m = L.chapterMembership(pages, (p) => p.ch);
+  assert.deepEqual(m, { b: "X", c: "X", d: "X", f: "Y", h: "X" });
+});

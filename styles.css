@@ -200,3 +200,8 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; } table.t th 
 .pipe-btn .nav-badge { background: #fff; color: var(--red); } .pipe-btn.on .nav-badge { background: var(--red); color: #fff; }
 @media (max-width: 760px) { .brand b { display: none; } .pipe-btn { font-size: 15px; padding: 3px 8px; } .top-actions { gap: 6px; } }
 .pg.over-m { outline: 2px dashed var(--ink); } .pg.over-l { box-shadow: inset 7px 0 0 var(--red); } .pg.over-r { box-shadow: inset -7px 0 0 var(--red); }
+.spreads { position: relative; }
+svg.chap { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 5; overflow: visible; }
+svg.chap path { fill: none; stroke: var(--cc); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+svg.chap g.sel path { stroke-width: 3.5; opacity: 1; }
+svg.chap text { fill: var(--cc); font: 700 10px var(--body); text-transform: uppercase; letter-spacing: .04em; paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; }

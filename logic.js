@@ -390,3 +390,18 @@ export function pipelineQueue(cards, issues, today, { person = "", imminent = IM
   const rank = { late: 0, today: 1, soon: 2, later: 3, undated: 4 };
   return out.sort((a, b) => rank[a.urgency] - rank[b.urgency] || (a.date || "").localeCompare(b.date || "") || (a.time || "").localeCompare(b.time || "") || a.cardTitle.localeCompare(b.cardTitle));
 }
+
+/** Chapitre de chaque page (id de page → id de chapitre) : les pages de rubrique, plus les pages d'ajustement
+ *  (intercalaire, publi, pub, vide) coincées entre deux pages du même chapitre. `pages` doit être triée. */
+export function chapterMembership(pages, chapterOf) {
+  const m = {}; let lastIdx = -1, lastChap = "";
+  pages.forEach((p, i) => {
+    if (p.type !== "rub") return;
+    const c = chapterOf(p) || "";
+    if (!c) { lastChap = ""; return; }
+    m[p.id] = c;
+    if (lastChap === c) for (let j = lastIdx + 1; j < i; j++) m[pages[j].id] = c;
+    lastIdx = i; lastChap = c;
+  });
+  return m;
+}
