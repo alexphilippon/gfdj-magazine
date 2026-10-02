@@ -1,6 +1,6 @@
-import * as L from "./logic.js?v=15";
-import { firebaseStore, memoryStore } from "./store.js?v=15";
-import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=15";
+import * as L from "./logic.js?v=16";
+import { firebaseStore, memoryStore } from "./store.js?v=16";
+import { seedConfig, syncAccess, SEED_ISSUES, newIssueDoc } from "./seed.js?v=16";
 
 const DEMO = new URLSearchParams(location.search).has("demo");
 const $ = (s, r = document) => r.querySelector(s);
@@ -62,7 +62,7 @@ function derive() {
 /* ---------- Démarrage ---------- */
 (async function boot() {
   try {
-    S.store = DEMO ? memoryStore((await import("./demo.js?v=15")).demoData()) : await firebaseStore();
+    S.store = DEMO ? memoryStore((await import("./demo.js?v=16")).demoData()) : await firebaseStore();
   } catch (e) { $("#app").innerHTML = `<div class="boot">Impossible de charger l'outil : ${esc(e.message)}</div>`; return; }
   S.store.onAuth(onUser);
 })();
@@ -397,7 +397,7 @@ function pipeView() {
     <div class="tools">${who}${S.pipe.undo.length ? `<button class="btn small" data-act="pipe-undo">↩ Annuler le dernier</button>` : ""}<span class="pipe-count">${done ? `<b>${done}</b> décroché${done > 1 ? "s" : ""} · ` : ""}<b>${q.length}</b> restant${q.length > 1 ? "s" : ""}${late ? ` · <span class="r">${late} en retard</span>` : ""}${today ? ` · ${today} aujourd'hui` : ""}</span></div>`;
   const nodeHtml = nodes.length ? `<section class="nodes"><h3>Nœuds à défaire (${nodes.length})</h3>${nodes.map((x) => `<div class="node"><span>${esc(x.msg)} — <b>${esc(x.cardTitle)}</b>${x.assignee ? ` · ${esc(pn(x.assignee))}` : ""}</span><button class="btn small" data-act="open-card" data-id="${x.cardId}">Corriger les dates</button></div>`).join("")}</section>` : "";
   if (!q.length) {
-    return `${head}<section class="clear"><img src="celebration-still.jpg?v=15" alt=""><h2>Voie libre !</h2><p>${done ? `${done} wagon${done > 1 ? "s" : ""} décroché${done > 1 ? "s" : ""}. Plus rien dans la file${person ? " pour " + esc(pn(person)) : ""}.` : `Rien à faire${person ? " pour " + esc(pn(person)) : ""} pour le moment.`}${nodes.length ? " Reste à défaire les nœuds ci-dessous." : ""}</p>${done ? `<button class="btn" data-act="celebrate-play">Rejouer la célébration</button>` : ""}</section>${nodeHtml}`;
+    return `${head}<section class="clear"><img src="celebration-still.jpg?v=16" alt=""><h2>Voie libre !</h2><p>${done ? `${done} wagon${done > 1 ? "s" : ""} décroché${done > 1 ? "s" : ""}. Plus rien dans la file${person ? " pour " + esc(pn(person)) : ""}.` : `Rien à faire${person ? " pour " + esc(pn(person)) : ""} pour le moment.`}${nodes.length ? " Reste à défaire les nœuds ci-dessous." : ""}</p>${done ? `<button class="btn" data-act="celebrate-play">Rejouer la célébration</button>` : ""}</section>${nodeHtml}`;
   }
   return `${head}${trainStrip(q)}<div class="pipe-main">${wagonFull(q[0])}
     ${q.length > 1 ? `<aside class="next-up"><h3>Ensuite</h3>${q.slice(1, 7).map((t) => `<button class="nx u-${t.urgency}" data-act="pipe-front" data-k="${esc(tkey(t))}"><i></i><span><b>${esc(t.label)}</b><small>${esc(t.cardTitle)} · ${t.urgency === "late" ? `retard ${t.daysLate} j` : t.date ? L.fmtShort(t.date) : "sans date"}</small></span></button>`).join("")}${q.length > 7 ? `<div class="muted small">+ ${q.length - 7} autres</div>` : ""}</aside>` : ""}</div>${nodeHtml}`;
@@ -519,7 +519,7 @@ function celebrateBlock(p, card) {
 let gifBytes = null;
 async function playCelebration() {
   try {
-    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=15")).arrayBuffer();
+    if (!gifBytes) gifBytes = await (await fetch("celebration.gif?v=16")).arrayBuffer();
     const url = URL.createObjectURL(new Blob([gifBytes], { type: "image/gif" })); // nouvelle URL à chaque fois : l'animation repart du début
     $("#celebrate")?.remove();
     const el = document.createElement("div"); el.id = "celebrate";
@@ -934,7 +934,7 @@ function drawChapterOutlines() {
     if (!labels[a.chap] || a.t < labels[a.chap].y - 1 || (Math.abs(a.t - labels[a.chap].y) <= 1 && xl < labels[a.chap].x)) labels[a.chap] = { x: xl, y: yt };
   }
   const names = Object.fromEntries(S.config.chapters.map((c) => [c.id, c.name]));
-  const COL = ["#1F294C", "#006AB1", "#007A61"], idx = Object.fromEntries(S.config.chapters.map((c, i) => [c.id, i]));
+  const COL = ["#1F294C", "#7F8DAE"], idx = Object.fromEntries(S.config.chapters.map((c, i) => [c.id, i]));
   const paths = Object.entries(lines).map(([id, d]) => {
     const sel = cur && cur === id, col = sel ? "#E10819" : COL[(idx[id] ?? 0) % COL.length], lb = labels[id];
     return `<g style="--cc:${col}" class="${sel ? "sel" : ""}"><path d="${d.join("")}"/>${lb ? `<text x="${lb.x + 10}" y="${lb.y + 3.5}">${esc(names[id] || "")}</text>` : ""}</g>`;
